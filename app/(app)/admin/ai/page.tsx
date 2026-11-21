@@ -55,7 +55,7 @@ export default async function AdminAiGeneratorPage() {
             Clinical Safety &amp; Editorial Governance Guardrail
           </div>
           <p className="muted">
-            AI-generated items are <strong>always saved as Drafts</strong> (`status = &quot;draft&quot;`), never published automatically, checked against content-hash duplicate detection, and must pass Initial, Clinical, and Editorial review before publication.
+            AI-generated items are <strong>always saved as Drafts</strong>, never published automatically, checked against content-hash duplicate detection, and must pass Initial, Clinical, and Editorial review before publication.
           </p>
         </div>
       </div>

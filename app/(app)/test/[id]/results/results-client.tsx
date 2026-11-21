@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Flag, Printer, Search, XCircle } from "lucide-react";
 import { QUESTION_TYPE_LABELS, type QuestionType } from "@/lib/questions/types";
+import { MarkdownText } from "@/components/markdown-text";
 
 type ReviewRow = {
   position: number;
@@ -138,7 +139,7 @@ export function ResultsReviewClient({ testId, items }: { testId: number; items: 
                     {isExpanded && (
                       <div className="mt-2 rounded-xl border border-accent/25 bg-accent-subtle/40 p-3 text-xs leading-relaxed">
                         <div className="font-bold text-accent mb-1">Clinical Rationale:</div>
-                        {it.rationale}
+                        <MarkdownText text={it.rationale} />
                       </div>
                     )}
                   </td>

@@ -3,6 +3,7 @@
 import { useState, use } from "react";
 import Link from "next/link";
 import { ArrowLeft, Bot, Send, Sparkles } from "lucide-react";
+import { MarkdownText } from "@/components/markdown-text";
 
 const STARTERS = [
   "How do I prioritize between 4 patients on the NCLEX-RN?",
@@ -21,7 +22,7 @@ export default function ExamAssistantPage({
   const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([
     {
       role: "assistant",
-      content: `Hello! I'm your QREXq Study Tutor for **${examLabel}**. Ask me about prioritization, delegation, pharmacology, dosage calculations, NGN case-study strategies, or any topic on your exam blueprint.`,
+      content: `Hello! I am your QREXq Study Tutor for **${examLabel}**. Ask me about prioritization, delegation, pharmacology, dosage calculations, NGN case-study strategies, or any topic on your exam blueprint.`,
     },
   ]);
   const [input, setInput] = useState("");
@@ -61,19 +62,15 @@ export default function ExamAssistantPage({
           className="inline-flex items-center gap-1.5 text-xs font-medium muted hover:text-foreground mb-1.5"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Back to {examLabel} Dashboard
+          Back to {examLabel} Home
         </Link>
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-              <Bot className="h-6 w-6 text-accent" />
-              {examLabel} AI Study Tutor
-            </h1>
-            <p className="text-xs sm:text-sm muted">
-              Interactive clinical judgment, mnemonics, pharmacology explanations, and test-taking strategy assistant.
-            </p>
-          </div>
-        </div>
+        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+          <Bot className="h-6 w-6 text-accent" />
+          {examLabel} AI Study Tutor
+        </h1>
+        <p className="text-xs sm:text-sm muted">
+          Interactive clinical judgment, mnemonics, pharmacology explanations, and test-taking strategy assistant.
+        </p>
       </div>
 
       {/* Quick Starter Prompts */}
@@ -97,13 +94,13 @@ export default function ExamAssistantPage({
           {messages.map((m, i) => (
             <div
               key={i}
-              className={`rounded-2xl p-4 text-xs sm:text-sm leading-relaxed whitespace-pre-line ${
+              className={`rounded-2xl p-4 text-xs sm:text-sm leading-relaxed ${
                 m.role === "user"
                   ? "ml-auto max-w-xl bg-accent text-white"
                   : "mr-auto max-w-2xl border border-border bg-muted/40"
               }`}
             >
-              {m.content}
+              {m.role === "user" ? m.content : <MarkdownText text={m.content} />}
             </div>
           ))}
           {loading && <div className="text-xs muted animate-pulse">Study Tutor is preparing an explanation…</div>}

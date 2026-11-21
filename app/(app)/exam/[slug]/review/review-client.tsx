@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Bookmark, CheckCircle2, HelpCircle, NotebookPen, Search, XCircle } from "lucide-react";
 import { DIFFICULTY_LABELS, QUESTION_TYPE_LABELS, type Difficulty, type QuestionType } from "@/lib/questions/types";
+import { MarkdownText } from "@/components/markdown-text";
 
 type BankRow = {
   id: number;
@@ -271,7 +272,7 @@ export function ReviewBankClient({ examSlug, items }: { examSlug: string; items:
                   <div className="rounded-xl border border-accent/25 bg-accent-subtle/40 p-4 space-y-2.5 text-xs leading-relaxed">
                     <div>
                       <div className="font-bold text-accent">Detailed Clinical Rationale:</div>
-                      <p className="mt-1 whitespace-pre-line">{r.rationale}</p>
+                      <MarkdownText text={r.rationale} />
                     </div>
                     {r.keyTakeaway && (
                       <div>

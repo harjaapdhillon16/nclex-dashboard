@@ -62,6 +62,7 @@ import {
   type WritingContent,
 } from "@/lib/questions/types";
 import type { ProductiveFeedback } from "@/lib/ai";
+import { MarkdownText, renderInlineMarkdown } from "@/components/markdown-text";
 
 type RunnerItem = {
   position: number;
@@ -1925,109 +1926,104 @@ function RationalePanel({
 
       {/* 3. Detailed Clinical / Exam Rationale */}
       <div className="space-y-1.5">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-accent">3. Detailed Clinical &amp; Educational Rationale</h3>
-        <p className="text-sm leading-relaxed whitespace-pre-line">{reveal.rationale}</p>
+        <h3 className="text-xs font-bold uppercase tracking-wider text-accent">Clinical &amp; Educational Rationale</h3>
+        <MarkdownText text={reveal.rationale} />
       </div>
 
       {/* 4. Why the Correct Answer is Correct */}
       {extras.whyCorrect && (
         <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/25 p-3.5 text-xs space-y-1">
-          <div className="font-bold text-emerald-700 dark:text-emerald-300">4. Why the Correct Answer is Correct</div>
-          <p className="leading-relaxed">{extras.whyCorrect}</p>
+          <div className="font-bold text-emerald-700 dark:text-emerald-300">Why the Correct Answer is Correct</div>
+          <p className="leading-relaxed">{renderInlineMarkdown(extras.whyCorrect)}</p>
         </div>
       )}
+
+      {/* 16. Key Takeaway & Strategy (Prominent) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+        <div className="rounded-xl bg-accent-subtle border border-accent/25 p-3.5 space-y-1">
+          <div className="font-bold text-accent">Key Takeaway</div>
+          <p className="font-medium">{renderInlineMarkdown(extras.keyTakeaway || reveal.rationale.split(".")[0] + ".")}</p>
+        </div>
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 space-y-1">
+          <div className="font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1">
+            <Lightbulb className="h-3.5 w-3.5" />
+            NCLEX &amp; Exam Test-Taking Strategy
+          </div>
+          <p>{renderInlineMarkdown(extras.strategy || "Eliminate options that delay urgent care or delegate RN-only assessment/evaluation/teaching tasks.")}</p>
+        </div>
+      </div>
 
       {/* 5. Why Every Option is Right or Wrong */}
       {Object.keys(optExp).length > 0 && (
         <div className="space-y-2">
           <div className="text-xs font-bold uppercase tracking-wider muted">
-            5. Option-by-Option Distractor &amp; Key Explanations
+            Option-by-Option Explanations
           </div>
           <div className="space-y-1.5 text-xs">
             {Object.entries(optExp).map(([optId, explanation]) => (
               <div key={optId} className="rounded-xl border border-border bg-muted/30 p-2.5">
                 <span className="font-mono font-bold uppercase text-accent mr-2">Option {optId}:</span>
-                <span>{explanation}</span>
+                <span>{renderInlineMarkdown(explanation)}</span>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* 6 through 16: Structured Clinical & Exam Teaching Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-        <div className="rounded-xl border border-border p-3 space-y-1">
-          <div className="font-bold text-accent">6. Priority Nursing / Clinical Action</div>
-          <p className="muted">{extras.priorityAction || "Assess client stability using ABCs, vital signs, and immediate safety cues before secondary interventions."}</p>
-        </div>
-        <div className="rounded-xl border border-border p-3 space-y-1">
-          <div className="font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1">
-            <ShieldAlert className="h-3.5 w-3.5" />
-            7. Safety Considerations
+      {/* 6 through 14: Collapsible Clinical Deep-Dive (Progressive Disclosure) */}
+      <details className="rounded-xl border border-border bg-muted/20 p-3.5 text-xs group">
+        <summary className="cursor-pointer font-bold text-accent select-none flex items-center justify-between">
+          <span>Clinical Judgment Breakdown (Priority Action, Safety, Assessment, Labs, Meds &amp; Education)</span>
+          <span className="text-[11px] muted">Click to expand</span>
+        </summary>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-border">
+          <div className="rounded-xl border border-border bg-surface p-3 space-y-1">
+            <div className="font-bold text-accent">Priority Nursing / Clinical Action</div>
+            <p className="muted">{extras.priorityAction || "Assess client stability using ABCs, vital signs, and immediate safety cues before secondary interventions."}</p>
           </div>
-          <p className="muted">{extras.safety || "Verify client identity, allergies, contraindications, and high-alert parameters prior to intervention."}</p>
-        </div>
-        <div className="rounded-xl border border-border p-3 space-y-1">
-          <div className="font-bold">8. Key Assessment Findings</div>
-          <p className="muted">{extras.assessmentFindings || "Monitor baseline versus trending vital signs, organ perfusion cues, and target laboratory markers."}</p>
-        </div>
-        <div className="rounded-xl border border-border p-3 space-y-1">
-          <div className="font-bold">9. Expected Outcomes</div>
-          <p className="muted">{extras.expectedOutcomes || "Resolution of acute physiological instability, maintenance of target parameters, and verbalized client understanding."}</p>
-        </div>
-        <div className="rounded-xl border border-border p-3 space-y-1">
-          <div className="font-bold">10. Nursing &amp; Clinical Interventions</div>
-          <p className="muted">{extras.interventions || extras.priorityAction || "Implement evidence-based care, document findings accurately, and escalate unexpected deterioration promptly."}</p>
-        </div>
-        <div className="rounded-xl border border-border p-3 space-y-1">
-          <div className="font-bold">11. Patient &amp; Family Education</div>
-          <p className="muted">{extras.education || "Educate on warning signs to report immediately, medication adherence, and preventive self-care measures."}</p>
-        </div>
-        <div className="rounded-xl border border-border p-3 space-y-1">
-          <div className="font-bold">12. Important Laboratory Values</div>
-          <p className="muted">{extras.labs || "Correlate serum electrolytes, CBC, coagulation, renal/hepatic panels, and ABGs with clinical presentation."}</p>
-        </div>
-        <div className="rounded-xl border border-border p-3 space-y-1">
-          <div className="font-bold">13. Medication Considerations</div>
-          <p className="muted">{extras.medications || "Review mechanism, therapeutic index, peak/onset, black-box warnings, and reversal antidotes where applicable."}</p>
-        </div>
-        <div className="rounded-xl border border-border p-3 space-y-1">
-          <div className="font-bold">14. Related Disease Process</div>
-          <p className="muted">{extras.diseaseProcess || `${question.category ?? "Core domain"} — ${question.topic ?? "Pathophysiology & clinical judgment"}`}</p>
-        </div>
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 space-y-1">
-          <div className="font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1">
-            <Lightbulb className="h-3.5 w-3.5" />
-            15. NCLEX &amp; Exam Test-Taking Strategy
+          <div className="rounded-xl border border-border bg-surface p-3 space-y-1">
+            <div className="font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+              <ShieldAlert className="h-3.5 w-3.5" />
+              Safety Considerations
+            </div>
+            <p className="muted">{extras.safety || "Verify client identity, allergies, contraindications, and high-alert parameters prior to intervention."}</p>
           </div>
-          <p>{extras.strategy || "Eliminate options that delay urgent care or delegate RN-only assessment/evaluation/teaching tasks."}</p>
-        </div>
-      </div>
-
-      {/* 16. Key Takeaway & Related Topics */}
-      <div className="rounded-xl bg-accent-subtle border border-accent/25 p-3.5 text-xs space-y-1.5">
-        <div className="font-bold text-accent">16. Key Takeaway</div>
-        <p className="font-medium">{extras.keyTakeaway || reveal.rationale.split(".")[0] + "."}</p>
-        {extras.relatedTopics && extras.relatedTopics.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            {extras.relatedTopics.map((rt, i) => (
-              <span key={i} className="chip bg-surface text-[11px]">
-                {rt}
-              </span>
-            ))}
+          <div className="rounded-xl border border-border bg-surface p-3 space-y-1">
+            <div className="font-bold">Key Assessment Findings</div>
+            <p className="muted">{extras.assessmentFindings || "Monitor baseline versus trending vital signs, organ perfusion cues, and target laboratory markers."}</p>
           </div>
-        )}
-      </div>
+          <div className="rounded-xl border border-border bg-surface p-3 space-y-1">
+            <div className="font-bold">Expected Outcomes</div>
+            <p className="muted">{extras.expectedOutcomes || "Resolution of acute physiological instability, maintenance of target parameters, and verbalized client understanding."}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-surface p-3 space-y-1">
+            <div className="font-bold">Nursing &amp; Clinical Interventions</div>
+            <p className="muted">{extras.interventions || extras.priorityAction || "Implement evidence-based care, document findings accurately, and escalate unexpected deterioration promptly."}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-surface p-3 space-y-1">
+            <div className="font-bold">Patient &amp; Family Education</div>
+            <p className="muted">{extras.education || "Educate on warning signs to report immediately, medication adherence, and preventive self-care measures."}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-surface p-3 space-y-1">
+            <div className="font-bold">Important Laboratory Values</div>
+            <p className="muted">{extras.labs || "Correlate serum electrolytes, CBC, coagulation, renal/hepatic panels, and ABGs with clinical presentation."}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-surface p-3 space-y-1">
+            <div className="font-bold">Medication &amp; Pathophysiology</div>
+            <p className="muted">{extras.medications || extras.diseaseProcess || `${question.category ?? "Core domain"} — ${question.topic ?? "Pathophysiology & clinical judgment"}`}</p>
+          </div>
+        </div>
+      </details>
 
       {/* 17 & 18: Add Personal Note + Practice Similar Question */}
       <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border">
         <button type="button" onClick={onOpenNote} className="btn btn-secondary btn-sm">
           <NotebookPen className="h-3.5 w-3.5 text-accent" />
-          17. Add / Edit Personal Note
+          Add / Edit Personal Note
         </button>
         <Link href={`/exam/${examSlug}/create`} className="btn btn-primary btn-sm">
           <HelpCircle className="h-3.5 w-3.5" />
-          18. Practice Similar Question in {question.topic ?? examSlug}
+          Practice Similar Question in {question.topic ?? examSlug}
         </Link>
       </div>
     </div>

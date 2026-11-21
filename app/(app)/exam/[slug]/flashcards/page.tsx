@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { exams, flashcardProgress, flashcards } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth";
 import { gradeFlashcardAction } from "../../../actions";
+import { MarkdownText, renderInlineMarkdown } from "@/components/markdown-text";
 
 export default async function ExamFlashcardsPage({
   params,
@@ -41,9 +42,9 @@ export default async function ExamFlashcardsPage({
           className="inline-flex items-center gap-1.5 text-xs font-medium muted hover:text-foreground mb-1.5"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Back to {exam.shortName} Dashboard
+          Back to {exam.shortName} Home
         </Link>
-        <h1 className="text-2xl font-bold tracking-tight">{exam.name} — Leitner Spaced-Repetition Flashcards</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{exam.name} — Spaced-Repetition Flashcards</h1>
         <p className="text-xs sm:text-sm muted">
           Master high-yield pharmacology, lab values, antidotes, and clinical frameworks across 5 Leitner memory boxes.
         </p>
@@ -51,7 +52,7 @@ export default async function ExamFlashcardsPage({
 
       {/* Leitner Box Summary */}
       <div className="grid grid-cols-5 gap-3">
-        {["Box 0 (New/Reset)", "Box 1 (1d)", "Box 2 (3d)", "Box 3 (7d)", "Box 4 (Mastered)"].map((label, b) => (
+        {["Box 0 (New)", "Box 1 (1d)", "Box 2 (3d)", "Box 3 (7d)", "Box 4 (Mastered)"].map((label, b) => (
           <div key={label} className="panel p-3.5 text-center">
             <div className="text-xl font-bold text-accent">{boxCounts[b]}</div>
             <div className="text-[11px] muted mt-0.5">{label}</div>
@@ -69,27 +70,29 @@ export default async function ExamFlashcardsPage({
                 <div className="flex items-center justify-between text-xs">
                   <span className="chip bg-accent-subtle text-accent">
                     <Layers className="h-3 w-3" />
-                    Leitner Box {box}
+                    Box {box}
                   </span>
-                  {prog?.dueAt && <span className="muted">Due: {prog.dueAt.toLocaleDateString()}</span>}
+                  {prog?.dueAt && <span className="muted">Next review: {prog.dueAt.toLocaleDateString()}</span>}
                 </div>
 
-                <div className="font-bold text-sm leading-relaxed">{card.front}</div>
+                <div className="font-bold text-sm leading-relaxed">{renderInlineMarkdown(card.front)}</div>
 
                 <details className="rounded-xl border border-border bg-muted/40 p-3 text-xs">
                   <summary className="cursor-pointer font-semibold text-accent select-none">
-                    Reveal Answer &amp; Memory Hook
+                    Flip Card &amp; View Answer
                   </summary>
-                  <p className="mt-2 leading-relaxed whitespace-pre-line">{card.back}</p>
+                  <div className="mt-2 pt-2 border-t border-border">
+                    <MarkdownText text={card.back} />
+                  </div>
                 </details>
               </div>
 
               <div className="flex items-center gap-2 pt-2 border-t border-border">
                 {(
                   [
-                    ["again", "Again (Box 0)", "btn-secondary text-rose-600"],
-                    ["good", "Good (+1 Box)", "btn-secondary"],
-                    ["easy", "Easy (+2 Boxes)", "btn-primary"],
+                    ["again", "Again", "btn-secondary text-rose-600"],
+                    ["good", "Good (+1)", "btn-secondary"],
+                    ["easy", "Easy (+2)", "btn-primary"],
                   ] as const
                 ).map(([rating, label, cls]) => (
                   <form key={rating} action={gradeFlashcardAction} className="flex-1">

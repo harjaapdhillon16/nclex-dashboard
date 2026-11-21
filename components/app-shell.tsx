@@ -18,9 +18,11 @@ import {
   FileSpreadsheet,
   FlaskConical,
   GraduationCap,
+  IndianRupee,
   Layers,
   LayoutDashboard,
   LogOut,
+  MapPin,
   Menu,
   Moon,
   PlusCircle,
@@ -75,6 +77,7 @@ export function AppShell({
   const drawerRef = useRef<HTMLDialogElement>(null);
   const [scale, setScale] = useState("100%");
   const [isDark, setIsDark] = useState(false);
+  const [currentAustyTab, setCurrentAustyTab] = useState("overview");
 
   const currentExam =
     enrolledExams.find((e) => e.slug === activeExamSlug) ??
@@ -86,6 +89,13 @@ export function AppShell({
       shortName: "NCLEX-RN",
     };
 
+  const isStaff = user.role === "admin" || user.role === "reviewer" || user.role === "instructor";
+  const activeWorkspace: "study" | "austy" | "admin" = pathname.startsWith("/austy")
+    ? "austy"
+    : pathname.startsWith("/admin")
+      ? "admin"
+      : "study";
+
   useEffect(() => {
     try {
       const savedScale = localStorage.getItem("qx-text") || "100%";
@@ -96,11 +106,6 @@ export function AppShell({
     }
   }, []);
 
-  /**
-   * Two-state theme toggle following modern-web-guidance `dark-mode-toggle`:
-   * computes target opposite of currently rendered scheme, removes stored value
-   * when target matches OS preference, and syncs `<meta name="color-scheme">`.
-   */
   function toggleTheme() {
     const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     const stored = localStorage.getItem("qx-theme");
@@ -139,108 +144,131 @@ export function AppShell({
   }
 
   const slug = currentExam.slug;
-  const studentNav = [
-    { href: "/dashboard", label: "All Exams & Courses", icon: LayoutDashboard },
-    { href: `/exam/${slug}`, label: `${currentExam.shortName} Overview`, icon: Activity },
-    { href: `/exam/${slug}/create`, label: "Create Custom Test", icon: PlusCircle },
-    { href: `/exam/${slug}/tests`, label: "Tests & Mock Exams", icon: ClipboardList },
+  const studyPrimaryNav = [
+    { href: `/exam/${slug}`, label: `${currentExam.shortName} Home`, icon: Activity },
+    { href: `/exam/${slug}/create`, label: "Practice & Build Test", icon: PlusCircle },
+    { href: `/exam/${slug}/tests`, label: "Mock Exams & History", icon: ClipboardList },
     { href: `/exam/${slug}/cases`, label: "NGN Case Studies", icon: FlaskConical },
-    { href: `/exam/${slug}/review`, label: "Question Bank & Review", icon: CheckSquare },
-    { href: `/exam/${slug}/analytics`, label: "Performance Analytics", icon: BarChart3 },
-    { href: `/exam/${slug}/study`, label: "Notes, Guides & Videos", icon: BookOpen },
-    { href: `/exam/${slug}/flashcards`, label: "Spaced Flashcards", icon: Layers },
+    { href: `/exam/${slug}/study`, label: "Study Notes & Guides", icon: BookOpen },
+    { href: `/exam/${slug}/flashcards`, label: "Flashcards", icon: Layers },
+    { href: `/exam/${slug}/review`, label: "Question Bank Review", icon: CheckSquare },
+    { href: `/exam/${slug}/analytics`, label: "Analytics & Readiness", icon: BarChart3 },
     { href: `/exam/${slug}/assistant`, label: "AI Study Tutor", icon: Bot },
+    { href: "/dashboard", label: "All 45+ Exam Courses", icon: LayoutDashboard },
   ];
 
-  const isStaff = user.role === "admin" || user.role === "reviewer" || user.role === "instructor";
+  const austyNav = [
+    { href: "/austy?tab=overview", tab: "overview", label: "Executive Overview", icon: LayoutDashboard },
+    { href: "/austy?tab=states", tab: "states", label: "States & Providers", icon: MapPin },
+    { href: "/austy?tab=employees", tab: "employees", label: "Employees & EPS Score", icon: Award },
+    { href: "/austy?tab=revenue", tab: "revenue", label: "Revenue & Incentives", icon: IndianRupee },
+    { href: "/austy?tab=teams", tab: "teams", label: "Teams & My Portal", icon: Users },
+    { href: "/austy?tab=reports", tab: "reports", label: "Reports & Audit Log", icon: FileSpreadsheet },
+  ];
 
-  const staffNav = [
-    { href: "/admin", label: "Admin & Review Console", icon: ShieldAlert },
-    { href: "/admin/questions", label: "Question Bank & Workflow", icon: CheckSquare },
+  const adminNav = [
+    { href: "/admin", label: "Overview & Users", icon: ShieldAlert },
+    { href: "/admin/questions", label: "Question Bank & Review", icon: CheckSquare },
     { href: "/admin/ai", label: "AI Question Generator", icon: Sparkles },
     { href: "/admin/courses", label: "Exam Course Manager", icon: GraduationCap },
     { href: "/admin/import-export", label: "Import & Export", icon: FileSpreadsheet },
-    { href: "/austy", label: "AUSTY Health Care ERP", icon: Briefcase },
-  ];
-
-  const accountNav = [
-    { href: "/austy", label: "AUSTY Employee Portal", icon: Award },
-    { href: "/plans", label: "Plans & Subscriptions", icon: CreditCard },
-    { href: "/notifications", label: "Notifications", icon: Bell, badge: unreadNotifications },
-    { href: "/profile", label: "Profile & Targets", icon: User },
   ];
 
   const renderSidebarContent = (onNavigate?: () => void) => (
     <div className="flex h-full flex-col justify-between text-sidebar-fg">
-      <div className="space-y-5 overflow-y-auto px-3 py-5">
-        <div className="flex items-center justify-between px-3">
+      <div className="space-y-4 overflow-y-auto px-3 py-5">
+        {/* Brand */}
+        <div className="px-2">
           <Link href="/dashboard" onClick={onNavigate} className="flex items-center gap-2.5 text-lg font-bold text-white">
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/15">
               <GraduationCap className="h-5 w-5" />
             </span>
             <div>
               <div className="leading-none">QREXq</div>
-              <div className="text-[11px] font-normal text-sidebar-muted mt-0.5">Multi-Exam &amp; AUSTY Suite</div>
+              <div className="text-[11px] font-normal text-sidebar-muted mt-0.5">
+                {activeWorkspace === "austy"
+                  ? "AUSTY Health Care ERP"
+                  : activeWorkspace === "admin"
+                    ? "Admin & Editorial"
+                    : "Exam Preparation"}
+              </div>
             </div>
           </Link>
         </div>
 
-        {/* Active course switcher */}
-        <div className="px-2">
-          <label htmlFor="sidebar-exam-switch" className="block px-1 mb-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
-            Active Course
-          </label>
-          <select
-            id="sidebar-exam-switch"
-            value={currentExam.slug}
-            onChange={(e) => {
-              onNavigate?.();
-              router.push(`/exam/${e.target.value}`);
-            }}
-            className="w-full rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-medium text-white outline-none focus:border-white/40"
+        {/* Workspace Switcher Pill */}
+        <div className="grid grid-cols-3 gap-1 rounded-xl bg-white/10 p-1 text-[11px] font-semibold">
+          <Link
+            href={`/exam/${slug}`}
+            onClick={onNavigate}
+            className={`rounded-lg py-1.5 text-center transition ${
+              activeWorkspace === "study" ? "bg-white text-slate-900 shadow" : "text-white/80 hover:text-white"
+            }`}
           >
-            {enrolledExams.map((ex) => (
-              <option key={ex.slug} value={ex.slug} className="text-slate-900">
-                {ex.name}
-              </option>
-            ))}
-          </select>
+            Exam Prep
+          </Link>
+          <Link
+            href="/austy"
+            onClick={onNavigate}
+            className={`rounded-lg py-1.5 text-center transition ${
+              activeWorkspace === "austy" ? "bg-white text-slate-900 shadow" : "text-white/80 hover:text-white"
+            }`}
+          >
+            AUSTY ERP
+          </Link>
+          {isStaff ? (
+            <Link
+              href="/admin"
+              onClick={onNavigate}
+              className={`rounded-lg py-1.5 text-center transition ${
+                activeWorkspace === "admin" ? "bg-white text-slate-900 shadow" : "text-white/80 hover:text-white"
+              }`}
+            >
+              Admin
+            </Link>
+          ) : (
+            <Link
+              href="/profile"
+              onClick={onNavigate}
+              className={`rounded-lg py-1.5 text-center transition ${
+                pathname === "/profile" ? "bg-white text-slate-900 shadow" : "text-white/80 hover:text-white"
+              }`}
+            >
+              Profile
+            </Link>
+          )}
         </div>
 
-        <nav aria-label="Study navigation" className="space-y-1">
-          <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
-            Exam Preparation
+        {/* Course Selector only shown in Exam Prep workspace */}
+        {activeWorkspace === "study" && (
+          <div className="px-1">
+            <label htmlFor="sidebar-exam-switch" className="block px-1 mb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
+              Active Course
+            </label>
+            <select
+              id="sidebar-exam-switch"
+              value={currentExam.slug}
+              onChange={(e) => {
+                onNavigate?.();
+                router.push(`/exam/${e.target.value}`);
+              }}
+              className="w-full rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-medium text-white outline-none focus:border-white/40"
+            >
+              {enrolledExams.map((ex) => (
+                <option key={ex.slug} value={ex.slug} className="text-slate-900">
+                  {ex.name}
+                </option>
+              ))}
+            </select>
           </div>
-          {studentNav.map((item) => {
-            const Icon = item.icon;
-            const active = pathname === item.href;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onNavigate}
-                className={`flex items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition ${
-                  active ? "bg-white/15 text-white font-semibold" : "text-sidebar-fg/85 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                <span className="flex items-center gap-2.5">
-                  <Icon className="h-4 w-4 shrink-0" />
-                  <span>{item.label}</span>
-                </span>
-                {active && <ChevronRight className="h-3.5 w-3.5 opacity-75" />}
-              </Link>
-            );
-          })}
-        </nav>
+        )}
 
-        {isStaff && (
-          <nav aria-label="Administration navigation" className="space-y-1 pt-2 border-t border-white/10">
-            <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
-              Admin &amp; Enterprise
-            </div>
-            {staffNav.map((item) => {
+        {/* Active Workspace Navigation */}
+        {activeWorkspace === "study" && (
+          <nav aria-label="Exam preparation navigation" className="space-y-1">
+            {studyPrimaryNav.map((item) => {
               const Icon = item.icon;
-              const active = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href));
+              const active = pathname === item.href;
               return (
                 <Link
                   key={item.href}
@@ -254,43 +282,110 @@ export function AppShell({
                     <Icon className="h-4 w-4 shrink-0" />
                     <span>{item.label}</span>
                   </span>
+                  {active && <ChevronRight className="h-3.5 w-3.5 opacity-75" />}
                 </Link>
               );
             })}
           </nav>
         )}
 
-        <nav aria-label="Account navigation" className="space-y-1 pt-2 border-t border-white/10">
-          <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
-            Account &amp; Modules
-          </div>
-          {accountNav.map((item) => {
-            const Icon = item.icon;
-            const active = pathname === item.href;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onNavigate}
-                className={`flex items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition ${
-                  active ? "bg-white/15 text-white font-semibold" : "text-sidebar-fg/85 hover:bg-white/10 hover:text-white"
-                }`}
-              >
-                <span className="flex items-center gap-2.5">
-                  <Icon className="h-4 w-4 shrink-0" />
-                  <span>{item.label}</span>
-                </span>
-                {item.badge ? (
-                  <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                    {item.badge}
+        {activeWorkspace === "austy" && (
+          <nav aria-label="AUSTY Health Care navigation" className="space-y-1">
+            <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
+              AUSTY Health Care Modules
+            </div>
+            {austyNav.map((item) => {
+              const Icon = item.icon;
+              const active = pathname === "/austy" && currentAustyTab === item.tab;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => {
+                    setCurrentAustyTab(item.tab);
+                    if (typeof window !== "undefined") {
+                      window.dispatchEvent(new CustomEvent("austy-tab", { detail: item.tab }));
+                    }
+                    onNavigate?.();
+                  }}
+                  className={`flex items-center justify-between rounded-xl px-3 py-2.5 text-xs font-medium transition ${
+                    active ? "bg-white/15 text-white font-semibold" : "text-sidebar-fg/85 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  <span className="flex items-center gap-2.5">
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span>{item.label}</span>
                   </span>
-                ) : null}
-              </Link>
-            );
-          })}
-        </nav>
+                  {active && <ChevronRight className="h-3.5 w-3.5 opacity-75" />}
+                </Link>
+              );
+            })}
+          </nav>
+        )}
+
+        {activeWorkspace === "admin" && (
+          <nav aria-label="Administration navigation" className="space-y-1">
+            <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
+              Editorial &amp; Governance
+            </div>
+            {adminNav.map((item) => {
+              const Icon = item.icon;
+              const active = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={onNavigate}
+                  className={`flex items-center justify-between rounded-xl px-3 py-2.5 text-xs font-medium transition ${
+                    active ? "bg-white/15 text-white font-semibold" : "text-sidebar-fg/85 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  <span className="flex items-center gap-2.5">
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span>{item.label}</span>
+                  </span>
+                  {active && <ChevronRight className="h-3.5 w-3.5 opacity-75" />}
+                </Link>
+              );
+            })}
+          </nav>
+        )}
+
+        {/* Compact Account Links */}
+        <div className="pt-3 border-t border-white/10 flex items-center justify-around text-xs">
+          <Link
+            href="/profile"
+            onClick={onNavigate}
+            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sidebar-fg/80 hover:bg-white/10 hover:text-white"
+          >
+            <User className="h-3.5 w-3.5" />
+            <span>Profile</span>
+          </Link>
+          <Link
+            href="/plans"
+            onClick={onNavigate}
+            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sidebar-fg/80 hover:bg-white/10 hover:text-white"
+          >
+            <CreditCard className="h-3.5 w-3.5" />
+            <span>Plans</span>
+          </Link>
+          <Link
+            href="/notifications"
+            onClick={onNavigate}
+            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sidebar-fg/80 hover:bg-white/10 hover:text-white"
+          >
+            <Bell className="h-3.5 w-3.5" />
+            <span>Alerts</span>
+            {unreadNotifications > 0 && (
+              <span className="rounded-full bg-rose-500 px-1.5 text-[10px] font-bold text-white">
+                {unreadNotifications}
+              </span>
+            )}
+          </Link>
+        </div>
       </div>
 
+      {/* User Footer */}
       <div className="border-t border-white/10 p-3">
         <div className="flex items-center justify-between rounded-xl bg-white/10 px-3 py-2.5">
           <div className="min-w-0">
@@ -352,19 +447,38 @@ export function AppShell({
             >
               <Menu className="h-5 w-5" />
             </button>
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <span className="hidden sm:inline text-xs font-medium muted">Course:</span>
-              <Link href={`/exam/${currentExam.slug}`} className="chip bg-accent-subtle text-accent border-accent/25">
-                {currentExam.name}
-              </Link>
-            </div>
+
+            {activeWorkspace === "austy" ? (
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <span className="chip bg-accent-subtle text-accent border-accent/25">
+                  <Briefcase className="h-3.5 w-3.5" />
+                  AUSTY Health Care Private Limited
+                </span>
+              </div>
+            ) : activeWorkspace === "admin" ? (
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <span className="chip bg-accent-subtle text-accent border-accent/25">
+                  <ShieldAlert className="h-3.5 w-3.5" />
+                  Editorial &amp; Platform Governance
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <span className="hidden sm:inline text-xs font-medium muted">Course:</span>
+                <Link href={`/exam/${currentExam.slug}`} className="chip bg-accent-subtle text-accent border-accent/25">
+                  {currentExam.name}
+                </Link>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
-            <Link href={`/exam/${currentExam.slug}/create`} className="btn btn-primary btn-sm hidden sm:inline-flex">
-              <PlusCircle className="h-3.5 w-3.5" />
-              Create Test
-            </Link>
+            {activeWorkspace === "study" && (
+              <Link href={`/exam/${currentExam.slug}/create`} className="btn btn-primary btn-sm hidden sm:inline-flex">
+                <PlusCircle className="h-3.5 w-3.5" />
+                Start Practice
+              </Link>
+            )}
 
             <button
               type="button"
@@ -399,13 +513,6 @@ export function AppShell({
                 </span>
               )}
             </Link>
-
-            {isStaff && (
-              <Link href="/admin" className="btn btn-secondary btn-sm hidden md:inline-flex">
-                <Users className="h-3.5 w-3.5" />
-                Admin
-              </Link>
-            )}
           </div>
         </header>
 
