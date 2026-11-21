@@ -3,20 +3,20 @@ import { asc, desc, eq } from "drizzle-orm";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { db } from "@/lib/db";
-import { caseStudies, exams, questions, results, users } from "@/lib/db/schema";
-import { getCurrentUser } from "@/lib/auth";
-import { getAustyDashboardData } from "@/lib/austy";
+import { caseStudies, questions, results } from "@/lib/db/schema";
+import { getCurrentUser, isStaff } from "@/lib/auth";
 
 export async function GET(request: Request) {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Exports include every learner's results, so staff only.
+  if (!user || !isStaff(user.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const url = new URL(request.url);
   const entity = url.searchParams.get("entity") ?? "questions";
   const format = url.searchParams.get("format") ?? "csv";
 
   let rows: Record<string, unknown>[] = [];
-  let filename = `qrexq-${entity}`;
+  const filename = `qrexq-${entity}`;
 
   if (entity === "template") {
     rows = [
@@ -80,98 +80,6 @@ export async function GET(request: Request) {
       totalTimeSec: r.totalTimeSec,
       completedAt: r.completedAt.toISOString(),
     }));
-  } else if (entity.startsWith("austy_")) {
-    const austy = await getAustyDashboardData({
-      state: url.searchParams.get("state") || undefined,
-      district: url.searchParams.get("district") || undefined,
-    });
-    filename = entity;
-    if (entity === "austy_state" || entity === "austy_all_india" || entity === "austy_district") {
-      rows = austy.stateBreakdown.map((s) => ({
-        State: s.state,
-        Doctors: s.doctors,
-        Pharmacies: s.pharmacies,
-        Labs: s.labs,
-        Hospitals: s.hospitals,
-        Ambulances: s.ambulances,
-        RentalVendors: s.rentals,
-        TotalProviders: s.totalProviders,
-        Transactions: s.transactions,
-        NetPlatformRevenueINR: s.netRevenue,
-        EligibleRevenueINR: s.eligibleRevenue,
-      }));
-    } else if (entity === "austy_employees" || entity === "austy_annual") {
-      rows = austy.rankings.map((r, idx) => ({
-        Rank: idx + 1,
-        EmployeeID: r.employee.employeeCode,
-        ReferenceID: r.employee.referenceId,
-        Name: r.employee.name,
-        Designation: r.employee.designation,
-        State: r.employee.assignedState,
-        District: r.employee.assignedDistrict,
-        City: r.employee.assignedCity,
-        DoctorsAdded: r.counts.doctor,
-        PharmaciesAdded: r.counts.pharmacy,
-        LabsAdded: r.counts.lab,
-        HospitalsAdded: r.counts.hospital,
-        AmbulancesAdded: r.counts.ambulance,
-        RentalsAdded: r.counts.rental_equipment,
-        TotalProviders: r.totalProviders,
-        VerifiedProviders: r.verifiedProviders,
-        ActiveProviders: r.activeProviders,
-        SuccessfulTransactions: r.successfulTransactions,
-        MonthlyTargetINR: r.employee.monthlyTargetRevenue,
-        EligibleRevenueINR: r.eligibleRevenue,
-        TargetAchievementPct: r.achievementPercent,
-        EPSScore100: r.epsScore,
-        IncentiveINR: r.incentiveAmount,
-        IncentiveStatus: r.incentiveStatus,
-      }));
-    } else if (entity === "austy_revenue") {
-      rows = austy.revenueCategories.map((c) => ({
-        BusinessCategory: c.label,
-        TotalTransactions: c.count,
-        CompletedTransactions: c.completedCount,
-        CancelledTransactions: c.cancelledCount,
-        TotalTransactionValueINR: c.totalTransactionValue,
-        GrossPlatformRevenueINR: c.grossPlatformRevenue,
-        PlatformServiceFeeINR: c.platformServiceFee,
-        DiscountsINR: c.discounts,
-        RefundsINR: c.refunds,
-        NetPlatformRevenueINR: c.netPlatformRevenue,
-        EligibleIncentiveRevenueINR: c.eligibleRevenue,
-      }));
-    } else if (entity === "austy_incentives") {
-      rows = austy.rankings.map((r) => ({
-        Period: "2026-11",
-        EmployeeID: r.employee.employeeCode,
-        ReferenceID: r.employee.referenceId,
-        EmployeeName: r.employee.name,
-        State: r.employee.assignedState,
-        TargetINR: r.employee.monthlyTargetRevenue,
-        EligibleRevenueINR: r.eligibleRevenue,
-        AchievementPct: r.achievementPercent,
-        EPSScore: r.epsScore,
-        BaseIncentiveINR: r.baseIncentive,
-        TeamManagementBonusINR: r.teamBonus,
-        TotalIncentiveINR: r.incentiveAmount,
-        ApprovalStatus: r.incentiveStatus,
-        TransactionReference: r.incentiveRow?.transactionReference ?? "Pending",
-      }));
-    } else if (entity === "austy_teams") {
-      rows = austy.teamPerformance.map((tp) => ({
-        TeamLeader: tp.leader.name,
-        ReferenceID: tp.leader.referenceId,
-        State: tp.leader.assignedState,
-        TotalAssignedEmployees: tp.totalAssigned,
-        ActiveEmployees: tp.activeCount,
-        InactiveEmployees: tp.inactiveCount,
-        TeamOnboarding: tp.teamOnboarding,
-        TeamEligibleRevenueINR: tp.teamRevenue,
-        TeamTargetINR: tp.teamTarget,
-        TeamAchievementPct: tp.achievementPct,
-      }));
-    }
   }
 
   if (format === "json") {

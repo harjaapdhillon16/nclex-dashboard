@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { GraduationCap, ShieldCheck } from "lucide-react";
+import { GraduationCap } from "lucide-react";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -17,16 +17,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </Link>
         </div>
 
-        <div className="my-10 space-y-5 max-w-md">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-medium">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            Multi-Exam International Prep &amp; AUSTY Health Care Analytics
-          </span>
-          <h1 className="text-3xl sm:text-4xl font-bold leading-tight">
-            Master NCLEX-RN, USMLE, IELTS, MCAT &amp; 40+ international examinations.
-          </h1>
+        <div className="my-10 space-y-4 max-w-md">
+          <h1 className="text-3xl sm:text-4xl font-bold leading-tight">Pass your exam. Know exactly what to study next.</h1>
           <p className="text-sm sm:text-base text-white/85 leading-relaxed">
-            Practice original, expert-reviewed clinical items, NGN progressive case studies, bow-tie and matrix formats, 100-question assessments, and adaptive mock exams.
+            Learn each topic, practice with exam-style questions, then test yourself with timed mock exams.
           </p>
         </div>
 

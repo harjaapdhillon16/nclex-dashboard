@@ -1,7 +1,7 @@
 import "server-only";
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { enrollments, exams, notifications } from "@/lib/db/schema";
+import { enrollments, exams } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth";
 import type { ShellExam, ShellUser } from "@/components/app-shell";
 
@@ -45,11 +45,6 @@ export async function getShellData() {
     enrolledExams = defaults.map(toShell);
   }
 
-  const [{ unread }] = await db
-    .select({ unread: sql<number>`count(*)::int` })
-    .from(notifications)
-    .where(and(eq(notifications.userId, user.id), isNull(notifications.readAt)));
-
   const shellUser: ShellUser = {
     id: user.id,
     name: user.name,
@@ -63,6 +58,5 @@ export async function getShellData() {
     user,
     shellUser,
     enrolledExams,
-    unreadNotifications: unread ?? 0,
   };
 }

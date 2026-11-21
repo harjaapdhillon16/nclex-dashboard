@@ -5,7 +5,7 @@ import { ArrowLeft, ArrowRight, BookOpen, ChevronDown, Clock, FileText, Layers, 
 import { db } from "@/lib/db";
 import { exams } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth";
-import { STAGE_LABEL, STAGE_RULES, STAGE_STYLE, getLearningPath, pct } from "@/lib/learning-path";
+import { STAGE_LABEL, STAGE_RULES, STAGE_STYLE, getLearningPath, pct, unitFieldName } from "@/lib/learning-path";
 import { MarkdownText } from "@/components/markdown-text";
 import { startCustomTestAction } from "../../../../actions";
 
@@ -147,9 +147,9 @@ export default async function UnitPage({ params }: { params: Promise<{ slug: str
           {unit.questionTotal > 0 ? (
             <>
               <p className="text-sm">
-                <strong>{unit.questionTotal}</strong> questions in this unit. You'll see the answer and why after each one.
+                <strong>{unit.questionTotal}</strong> questions in this unit. You&apos;ll see the answer and why after each one.
                 <span className="block text-xs muted">
-                  Questions you haven't seen yet are picked first. Once you've seen them all, you'll get them again.
+                  Questions you haven&apos;t seen yet are picked first. Once you&apos;ve seen them all, you&apos;ll get them again.
                 </span>
               </p>
               <form action={startCustomTestAction} className="shrink-0">
@@ -158,7 +158,7 @@ export default async function UnitPage({ params }: { params: Promise<{ slug: str
                 <input type="hidden" name="mode" value="tutor" />
                 <input type="hidden" name="pool" value="unused" />
                 <input type="hidden" name="count" value={String(practiceCount)} />
-                <input type="hidden" name="categoryIds" value={unit.id} />
+                <input type="hidden" name={unitFieldName(path.unitKind)} value={unit.id} />
                 <input type="hidden" name="name" value={`${unit.name} practice`} />
                 <button type="submit" className="btn btn-primary btn-sm">
                   Practice {practiceCount} questions

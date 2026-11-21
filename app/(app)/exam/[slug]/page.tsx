@@ -7,9 +7,15 @@ import { enrollments, exams } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth";
 import { examAnalytics } from "@/lib/tests";
 import { estimate } from "@/lib/scoring";
-import { getLearningPath, pct } from "@/lib/learning-path";
+import { STAGE_LABEL, STAGE_STYLE, daysUntil, getLearningPath, pct, type Unit } from "@/lib/learning-path";
 import type { ScoringModel } from "@/lib/seed/catalog";
-import { startCustomTestAction } from "../../actions";
+import { Bar, Donut, SectionHeading, accTone } from "./_ui";
+
+const LEVEL_TEXT = {
+  strong: "text-emerald-600 dark:text-emerald-400",
+  moderate: "text-amber-600 dark:text-amber-400",
+  weak: "text-rose-600 dark:text-rose-400",
+} as const;
 
 export default async function ExamHomePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -32,7 +38,7 @@ export default async function ExamHomePage({ params }: { params: Promise<{ slug:
   }
 
   const [stats, path] = await Promise.all([examAnalytics(user.id, exam.id), getLearningPath(user.id, exam)]);
-  const { units, totals, nextStep } = path;
+  const { units, totals, nextStep, bank } = path;
 
   const est = estimate(exam.scoring as ScoringModel, stats.accuracy || 0, {
     difficultyWeighted: stats.readiness || stats.accuracy || 0,
@@ -41,16 +47,17 @@ export default async function ExamHomePage({ params }: { params: Promise<{ slug:
   const dailyGoal = enrollment?.dailyGoal ?? user.dailyGoal ?? 50;
   const dailyPct = Math.min(100, Math.round((stats.today / Math.max(1, dailyGoal)) * 100));
   const targetDateStr = enrollment?.targetDate ?? user.targetExamDate;
-  const daysUntilTarget = targetDateStr
-    ? Math.max(0, Math.ceil((new Date(targetDateStr).getTime() - Date.now()) / 86400000))
-    : null;
+  const daysUntilTarget = daysUntil(targetDateStr);
 
-  const started = totals.answered > 0;
-  const unitPct = units.length ? Math.round((totals.unitsStrong / units.length) * 100) : 0;
-  const attention = units
-    .filter((u) => u.stage === "needs_work" || u.stage === "in_progress")
-    .sort((a, b) => (a.accuracy ?? 1) - (b.accuracy ?? 1))
-    .slice(0, 3);
+  const started = totals.attempts > 0;
+  const used = bank.correct + bank.incorrect + bank.omitted;
+
+  // Weakest first among units you've touched, then the ones still to start, in blueprint order.
+  const touched = units.filter((u) => u.stage !== "not_started").sort((a, b) => (a.accuracy ?? 1) - (b.accuracy ?? 1));
+  const untouched = units.filter((u) => u.stage === "not_started");
+  const rankedUnits: Unit[] = [...touched, ...untouched];
+
+  const recent = stats.recentTests.slice(0, 3);
 
   return (
     <div className="space-y-6">
@@ -59,7 +66,7 @@ export default async function ExamHomePage({ params }: { params: Promise<{ slug:
           {daysUntilTarget !== null && (
             <span className="chip">
               <Calendar className="h-3.5 w-3.5 text-accent" />
-              {daysUntilTarget} days to your exam ({targetDateStr})
+              {daysUntilTarget} days to your exam
             </span>
           )}
           {stats.streak > 0 && (
@@ -69,29 +76,25 @@ export default async function ExamHomePage({ params }: { params: Promise<{ slug:
             </span>
           )}
         </div>
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-          {started ? `Welcome back — ${exam.name}` : `Welcome to ${exam.name}`}
-        </h1>
-        <p className="text-sm muted max-w-3xl">{exam.description}</p>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{exam.name}</h1>
       </header>
 
       {path.isEarlyAccess && (
         <div className="flex gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs">
           <Info className="h-4 w-4 shrink-0 text-amber-600" />
           <p>
-            <strong>Early-access course.</strong> {exam.shortName} has {totals.lessons} lesson{totals.lessons === 1 ? "" : "s"} and{" "}
-            {totals.questions} practice question{totals.questions === 1 ? "" : "s"} so far; more are being added. NCLEX-RN is the most
-            complete course today.
+            <strong>Early-access course.</strong> {totals.lessons} lesson{totals.lessons === 1 ? "" : "s"} and {bank.total} practice
+            question{bank.total === 1 ? "" : "s"} so far; more are being added.
           </p>
         </div>
       )}
 
-      {/* THE one thing to do now */}
-      <section className="panel panel-pad border-accent/40 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      {/* The one thing to do now */}
+      <section className="panel panel-pad flex flex-col gap-4 border-accent/40 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-accent">Your next step</div>
           <h2 className="text-xl font-bold">{nextStep.title}</h2>
-          <p className="text-sm muted max-w-2xl">{nextStep.detail}</p>
+          <p className="max-w-2xl text-sm muted">{nextStep.detail}</p>
         </div>
         <Link href={nextStep.href} className="btn btn-primary shrink-0">
           {nextStep.cta}
@@ -99,153 +102,222 @@ export default async function ExamHomePage({ params }: { params: Promise<{ slug:
         </Link>
       </section>
 
-      {/* How this course works */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-bold">How {exam.shortName} works here</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <Link href={`/exam/${exam.slug}/learn`} className="panel p-4 space-y-2 transition hover:border-accent/50">
-            <div className="flex items-center gap-2 font-bold">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-white text-xs">1</span>
-              <BookOpen className="h-4 w-4 text-accent" />
-              Learn
-            </div>
-            <p className="text-xs muted">
-              {units.length} unit{units.length === 1 ? "" : "s"}, each with lessons, flashcards and practice questions. Go in order.
-            </p>
-            <div className="text-xs font-semibold text-accent">Open the learning path →</div>
-          </Link>
-
-          <div className="panel p-4 space-y-2">
-            <div className="flex items-center gap-2 font-bold">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-white text-xs">2</span>
-              <PenLine className="h-4 w-4 text-accent" />
-              Practice
-            </div>
-            <p className="text-xs muted">Answer questions with instant feedback and an explanation. Pick a topic, or just go.</p>
-            <div className="flex flex-wrap gap-2 pt-1">
-              <form action={startCustomTestAction}>
-                <input type="hidden" name="examSlug" value={exam.slug} />
-                <input type="hidden" name="kind" value="tutorial" />
-                <input type="hidden" name="mode" value="tutor" />
-                <input type="hidden" name="pool" value="unused" />
-                <input type="hidden" name="count" value="10" />
-                <button type="submit" className="btn btn-secondary btn-sm" disabled={totals.questions === 0}>
-                  10 quick questions
-                </button>
-              </form>
-              <Link href={`/exam/${exam.slug}/create`} className="btn btn-secondary btn-sm">
-                Choose topics
-              </Link>
-            </div>
-          </div>
-
-          <div className="panel p-4 space-y-2">
-            <div className="flex items-center gap-2 font-bold">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-white text-xs">3</span>
-              <ClipboardList className="h-4 w-4 text-accent" />
-              Test yourself
-            </div>
-            <p className="text-xs muted">
-              A full mock exam: {exam.mockQuestionCount} questions in {exam.durationMinutes} minutes. Answers are shown at the end,
-              like the real thing.
-            </p>
-            <div className="flex flex-wrap gap-2 pt-1">
-              <form action={startCustomTestAction}>
-                <input type="hidden" name="examSlug" value={exam.slug} />
-                <input type="hidden" name="kind" value="mock" />
-                <input type="hidden" name="mode" value="exam" />
-                <input type="hidden" name="count" value={String(exam.mockQuestionCount)} />
-                <button type="submit" className="btn btn-secondary btn-sm" disabled={totals.questions === 0}>
-                  Start mock exam
-                </button>
-              </form>
-              <Link href={`/exam/${exam.slug}/tests`} className="btn btn-secondary btn-sm">
-                Past tests
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Progress snapshot: 4 numbers, each explained */}
-      <section className="space-y-3">
-        <div className="flex items-end justify-between">
-          <h2 className="text-lg font-bold">Your progress</h2>
-          <Link href={`/exam/${exam.slug}/analytics`} className="text-xs font-semibold text-accent hover:underline">
-            Detailed progress →
-          </Link>
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Stat
-            label="Units strong"
-            value={`${totals.unitsStrong} / ${units.length}`}
-            note="Units where you've answered most questions with 75%+ accuracy."
-            bar={unitPct}
+      {!started ? (
+        /* New learner: explain the loop instead of showing empty charts */
+        <section className="space-y-3">
+          <SectionHeading
+            title={`How ${exam.shortName} works here`}
+            caption={`${bank.total} questions · ${totals.lessons} lessons · ${totals.cards} flashcards`}
           />
-          <Stat
-            label="Questions answered"
-            value={`${stats.distinctAnswered} / ${stats.totalQuestions}`}
-            note="Different questions you've answered at least once."
-            bar={stats.totalQuestions ? Math.round((stats.distinctAnswered / stats.totalQuestions) * 100) : 0}
-          />
-          <Stat
-            label="Accuracy"
-            value={started ? `${Math.round(stats.accuracy * 100)}%` : "—"}
-            note={started ? `${stats.correct} right, ${stats.incorrect} wrong overall.` : "Appears after your first practice."}
-          />
-          <Stat
-            label="Today"
-            value={`${stats.today} / ${dailyGoal}`}
-            note="Questions answered today vs. your daily goal."
-            bar={dailyPct}
-          />
-        </div>
-        {started && (
-          <p className="text-xs muted">
-            {est.label}: <strong>{est.headline}</strong> — a rough practice estimate, not a prediction of your real score.
-          </p>
-        )}
-      </section>
-
-      {attention.length > 0 && (
-        <section className="panel panel-pad space-y-3">
-          <div className="flex items-center gap-2">
-            <Target className="h-4 w-4 text-accent" />
-            <h2 className="text-lg font-bold">Where to spend your time</h2>
-          </div>
-          <ul className="divide-y divide-border text-sm">
-            {attention.map((u) => (
-              <li key={u.id} className="flex items-center justify-between gap-3 py-2.5">
-                <div>
-                  <div className="font-semibold">{u.name}</div>
-                  <div className="text-xs muted">
-                    {u.stage === "needs_work" ? "Needs work" : "In progress"} · {pct(u.accuracy)}% correct · {u.answered} of{" "}
-                    {u.questionTotal} answered
-                  </div>
-                </div>
-                <Link href={`/exam/${exam.slug}/learn/${u.id}`} className="btn btn-secondary btn-sm shrink-0">
-                  Open unit
-                  <ArrowRight className="h-3 w-3" />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {stats.recentTests.length > 0 && (
-        <section className="panel panel-pad space-y-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold">Recent tests</h2>
-            <Link href={`/exam/${exam.slug}/tests`} className="text-xs font-semibold text-accent hover:underline">
-              All tests →
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <Link href={`/exam/${exam.slug}/learn`} className="panel space-y-2 p-4 transition hover:border-accent/50">
+              <div className="flex items-center gap-2 font-bold">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-xs text-white">1</span>
+                <BookOpen className="h-4 w-4 text-accent" />
+                Learn
+              </div>
+              <p className="text-xs muted">
+                {units.length} unit{units.length === 1 ? "" : "s"}, each with lessons, flashcards and practice questions.
+              </p>
+              <div className="text-xs font-semibold text-accent">Open the learning path →</div>
+            </Link>
+            <Link href={`/exam/${exam.slug}/create`} className="panel space-y-2 p-4 transition hover:border-accent/50">
+              <div className="flex items-center gap-2 font-bold">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-xs text-white">2</span>
+                <PenLine className="h-4 w-4 text-accent" />
+                Practice
+              </div>
+              <p className="text-xs muted">Build a test from any units and get the answer and reasoning after every question.</p>
+              <div className="text-xs font-semibold text-accent">Create a test →</div>
+            </Link>
+            <Link href={`/exam/${exam.slug}/tests`} className="panel space-y-2 p-4 transition hover:border-accent/50">
+              <div className="flex items-center gap-2 font-bold">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-xs text-white">3</span>
+                <ClipboardList className="h-4 w-4 text-accent" />
+                Test yourself
+              </div>
+              <p className="text-xs muted">
+                A timed mock exam: {exam.mockQuestionCount} questions in {exam.durationMinutes} minutes, answers at the end.
+              </p>
+              <div className="text-xs font-semibold text-accent">See mock exams →</div>
             </Link>
           </div>
-          <div className="divide-y divide-border text-sm">
-            {stats.recentTests.slice(0, 3).map((t) => (
-              <div key={t.id} className="flex items-center justify-between gap-3 py-2.5">
+        </section>
+      ) : (
+        <>
+          <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            {/* Question bank usage */}
+            <div className="panel panel-pad space-y-4">
+              <SectionHeading title="Question bank" caption={`${used} of ${bank.total} questions used`} />
+              <div className="flex items-center gap-5">
+                <Donut
+                  segments={[
+                    { label: "Correct", value: bank.correct, stroke: "stroke-emerald-500", dot: "bg-emerald-500" },
+                    { label: "Incorrect", value: bank.incorrect, stroke: "stroke-rose-500", dot: "bg-rose-500" },
+                    { label: "Omitted", value: bank.omitted, stroke: "stroke-amber-500", dot: "bg-amber-500" },
+                  ]}
+                  center={`${bank.total ? Math.round((used / bank.total) * 100) : 0}%`}
+                  sub="used"
+                />
+                <ul className="flex-1 space-y-1.5 text-xs">
+                  {[
+                    { l: "Correct", v: bank.correct, d: "bg-emerald-500" },
+                    { l: "Incorrect", v: bank.incorrect, d: "bg-rose-500" },
+                    { l: "Omitted", v: bank.omitted, d: "bg-amber-500" },
+                    { l: "Unused", v: bank.unused, d: "bg-muted border border-border" },
+                  ].map((r) => (
+                    <li key={r.l} className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-2">
+                        <span className={`h-2.5 w-2.5 rounded-full ${r.d}`} />
+                        {r.l}
+                      </span>
+                      <span className="font-semibold tabular-nums">{r.v}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <p className="text-[11px] leading-snug muted">
+                Each question counts once, by your most recent answer. Omitted means you skipped it in a finished test.
+              </p>
+            </div>
+
+            {/* Readiness */}
+            <div className="panel panel-pad flex flex-col justify-between space-y-3">
+              <SectionHeading title={est.label} caption="Practice estimate" />
+              <div>
+                <div className={`text-3xl font-bold ${est.level ? LEVEL_TEXT[est.level] : "text-accent"}`}>{est.headline}</div>
+                <p className="mt-1 text-xs muted">
+                  {totals.attempts < 30
+                    ? `Based on only ${totals.attempts} answer${totals.attempts === 1 ? "" : "s"}. Answer at least 30 for a steadier read.`
+                    : (est.detail ?? `Based on ${totals.attempts} answers.`)}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 border-t border-border pt-3 text-xs">
                 <div>
-                  <div className="font-semibold">{t.name}</div>
+                  <div className={`text-lg font-bold ${accTone(stats.accuracy).text}`}>{Math.round(stats.accuracy * 100)}%</div>
+                  <div className="muted">overall accuracy</div>
+                </div>
+                <div>
+                  <div className="text-lg font-bold">{Math.round(stats.avgTime)}s</div>
+                  <div className="muted">per question</div>
+                </div>
+              </div>
+              <p className="text-[11px] leading-snug faint">{est.disclaimer}</p>
+            </div>
+
+            {/* Today */}
+            <div className="panel panel-pad space-y-4">
+              <SectionHeading title="Today" caption="Questions answered vs. your daily goal" />
+              <div>
+                <div className="flex items-baseline justify-between">
+                  <div className="text-3xl font-bold tabular-nums">
+                    {stats.today}
+                    <span className="text-base font-normal muted"> / {dailyGoal}</span>
+                  </div>
+                  <span className="text-xs muted">{dailyPct}%</span>
+                </div>
+                <div className="mt-2">
+                  <Bar value={dailyPct} height="h-2" />
+                </div>
+              </div>
+              <ul className="space-y-2 border-t border-border pt-3 text-xs">
+                <li className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Flame className="h-3.5 w-3.5 text-amber-500" /> Streak
+                  </span>
+                  <span className="font-semibold">
+                    {stats.streak} day{stats.streak === 1 ? "" : "s"}
+                  </span>
+                </li>
+                <li className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Calendar className="h-3.5 w-3.5 text-accent" /> Exam date
+                  </span>
+                  <span className="font-semibold">
+                    {daysUntilTarget !== null ? (
+                      `${daysUntilTarget} days`
+                    ) : (
+                      <Link href="/profile" className="text-accent underline">
+                        Set a date
+                      </Link>
+                    )}
+                  </span>
+                </li>
+                <li className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Target className="h-3.5 w-3.5 text-accent" /> Daily goal
+                  </span>
+                  <Link href="/profile" className="font-semibold text-accent underline">
+                    {dailyGoal} questions
+                  </Link>
+                </li>
+              </ul>
+            </div>
+          </section>
+
+          {/* Performance by unit */}
+          <section className="space-y-3">
+            <SectionHeading
+              title="Performance by unit"
+              caption="Weakest first. Open a unit to read, memorise and practice it."
+              right={
+                <Link href={`/exam/${exam.slug}/analytics`} className="text-xs font-semibold text-accent hover:underline">
+                  Full progress →
+                </Link>
+              }
+            />
+            <div className="panel divide-y divide-border overflow-hidden">
+              {rankedUnits.map((u) => {
+                const tone = accTone(u.accuracy);
+                return (
+                  <Link
+                    key={u.id}
+                    href={`/exam/${exam.slug}/learn/${u.id}`}
+                    className="grid grid-cols-1 gap-2 px-4 py-3 transition hover:bg-muted/50 sm:grid-cols-12 sm:items-center sm:gap-4"
+                  >
+                    <div className="sm:col-span-5">
+                      <div className="text-sm font-semibold leading-snug">{u.name}</div>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                        <span className={`chip border text-[10px] font-semibold ${STAGE_STYLE[u.stage]}`}>{STAGE_LABEL[u.stage]}</span>
+                        {u.weight != null && <span className="text-[11px] muted">{u.weight}% of exam</span>}
+                      </div>
+                    </div>
+                    <div className="sm:col-span-3">
+                      <div className="mb-1 text-[11px] muted tabular-nums">
+                        {u.answered} / {u.questionTotal} answered
+                      </div>
+                      <Bar value={u.questionTotal ? (u.answered / u.questionTotal) * 100 : 0} />
+                    </div>
+                    <div className="sm:col-span-3">
+                      <div className={`mb-1 text-[11px] font-semibold tabular-nums ${tone.text}`}>
+                        {u.accuracy == null ? "No answers yet" : `${pct(u.accuracy)}% correct`}
+                      </div>
+                      <Bar value={pct(u.accuracy)} className={tone.bar} />
+                    </div>
+                    <ArrowRight className="hidden h-4 w-4 justify-self-end muted sm:col-span-1 sm:block" />
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        </>
+      )}
+
+      {recent.length > 0 && (
+        <section className="space-y-3">
+          <SectionHeading
+            title="Recent tests"
+            right={
+              <Link href={`/exam/${exam.slug}/tests`} className="text-xs font-semibold text-accent hover:underline">
+                All tests →
+              </Link>
+            }
+          />
+          <div className="panel divide-y divide-border">
+            {recent.map((t) => (
+              <div key={t.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold">{t.name}</div>
                   <div className="text-xs muted">
                     {t.n} questions · {t.status === "completed" ? "Finished" : "In progress"}
                   </div>
@@ -254,28 +326,13 @@ export default async function ExamHomePage({ params }: { params: Promise<{ slug:
                   href={t.status === "completed" ? `/test/${t.id}/results` : `/test/${t.id}`}
                   className="btn btn-secondary btn-sm shrink-0"
                 >
-                  {t.status === "completed" ? "See results" : "Resume"}
+                  {t.status === "completed" ? "Review" : "Resume"}
                 </Link>
               </div>
             ))}
           </div>
         </section>
       )}
-    </div>
-  );
-}
-
-function Stat({ label, value, note, bar }: { label: string; value: string; note: string; bar?: number }) {
-  return (
-    <div className="panel p-4 space-y-1">
-      <div className="text-xs font-medium muted">{label}</div>
-      <div className="text-2xl font-bold">{value}</div>
-      {bar !== undefined && (
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-          <div className="h-full rounded-full bg-accent" style={{ width: `${bar}%` }} />
-        </div>
-      )}
-      <div className="text-[11px] muted leading-snug">{note}</div>
     </div>
   );
 }

@@ -95,10 +95,10 @@ export default function LoginPage({
       <div className="panel panel-pad space-y-3">
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider faint">
           <Sparkles className="h-3.5 w-3.5 text-accent" />
-          One-Click Demo Role Access
+          Demo access
         </div>
         <p className="text-xs muted">
-          Instantly explore the platform as a Student, Clinical Content Reviewer, or Super Admin (including AUSTY Health Care Analytics):
+          Try the app instantly as a student, a content reviewer, or an admin:
         </p>
         <div className="grid grid-cols-3 gap-2">
           <form action={demoLoginAction}>

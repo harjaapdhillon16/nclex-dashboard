@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: "QREXq — International Exam Preparation & AUSTY Analytics", template: "%s · QREXq" },
-  description: "Original, expert-reviewed preparation for NCLEX-RN, USMLE, MCAT, IELTS, OET and more, plus AUSTY Health Care Enterprise Analytics.",
+  title: { default: "QREXq — Exam preparation", template: "%s · QREXq" },
+  description: "Learn each topic, practice with exam-style questions, and test yourself with mock exams for NCLEX-RN, USMLE, MCAT, IELTS and more.",
 };
 export const viewport: Viewport = { themeColor: "#2747d0" };
 

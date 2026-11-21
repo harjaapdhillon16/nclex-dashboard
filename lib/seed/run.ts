@@ -17,6 +17,15 @@ async function optional<T>(path: string, name: string): Promise<T | undefined> {
   }
 }
 
+/** Starter content for the thinner courses: [file, export-name suffix]. Missing files are skipped. */
+const STARTER_FILES: [string, string][] = [
+  ["nursing-pa", "NURSING_PA"],
+  ["medical", "MEDICAL"],
+  ["dental-pharmacy", "DENTAL_PHARMACY"],
+  ["english", "ENGLISH"],
+  ["academic-professional", "ACADEMIC"],
+];
+
 async function main() {
   console.log("Seeding categories & exams…");
   for (const [i, c] of EXAM_CATEGORIES.entries()) {
@@ -46,6 +55,7 @@ async function main() {
     ["./content/nclex-b", "NCLEX_B"],
     ["./content/clinical-exams", "CLINICAL_EXAMS"],
     ["./content/academic-exams", "ACADEMIC_EXAMS"],
+    ...STARTER_FILES.map(([file, suffix]) => [`./content/starter/${file}`, `STARTER_QUESTIONS_${suffix}`] as [string, string]),
   ];
   for (const [path, name] of sources) {
     const items = await optional<SeedQuestion[]>(path, name);
@@ -71,8 +81,12 @@ async function main() {
   type M = { exam: string; topic: string; category?: string; kind: string; title: string; summary: string; body: string; durationMinutes?: number; videoUrl?: string };
   type F = { exam: string; topic: string; category?: string; front: string; back: string };
   type L = { group: string; name: string; range: string; unit: string; note?: string };
-  const mats = await optional<M[]>("./content/materials", "MATERIALS");
-  const cards = await optional<F[]>("./content/materials", "FLASHCARDS");
+  const mats = [...((await optional<M[]>("./content/materials", "MATERIALS")) ?? [])];
+  const cards = [...((await optional<F[]>("./content/materials", "FLASHCARDS")) ?? [])];
+  for (const [file, suffix] of STARTER_FILES) {
+    mats.push(...((await optional<M[]>(`./content/starter/${file}`, `STARTER_MATERIALS_${suffix}`)) ?? []));
+    cards.push(...((await optional<F[]>(`./content/starter/${file}`, `STARTER_FLASHCARDS_${suffix}`)) ?? []));
+  }
   const labs = await optional<L[]>("./content/materials", "LAB_VALUES");
   const resolvers = new Map<string, TaxonomyResolver>();
   const res = (slug: string) => {
@@ -127,10 +141,6 @@ async function main() {
   }
   const [student] = await db.select().from(users).where(eq(users.email, "student@qrexq.test"));
   for (const e of [nclex, ielts]) if (e) await db.insert(enrollments).values({ userId: student.id, examId: e.id }).onConflictDoNothing();
-
-  console.log("Seeding AUSTY Health Care analytics records…");
-  const { seedAustyIfEmpty } = await import("@/lib/austy");
-  await seedAustyIfEmpty();
 
   console.log("Done.");
   process.exit(0);

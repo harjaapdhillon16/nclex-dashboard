@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 
 const COOKIE = "qrexq_session";
-const PROTECTED_PREFIXES = ["/dashboard", "/exam", "/test", "/admin", "/profile", "/catalog", "/notifications", "/plans", "/austy"];
+const PROTECTED_PREFIXES = ["/dashboard", "/exam", "/test", "/admin", "/profile", "/catalog", "/notifications", "/plans"];
 const AUTH_PAGES = ["/login", "/register"];
 
 async function hasValidToken(token: string | undefined): Promise<{ sub: string; role: string } | null> {

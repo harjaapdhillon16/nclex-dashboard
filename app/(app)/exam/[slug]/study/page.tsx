@@ -43,7 +43,7 @@ export default async function ExamStudyMaterialsPage({
         </Link>
         <h1 className="text-2xl font-bold tracking-tight">{exam.shortName} — all study notes</h1>
         <p className="text-xs sm:text-sm muted max-w-2xl">
-          Every lesson for this course in one list. If you're not sure where to begin, the{" "}
+          Every lesson for this course in one list. If you&apos;re not sure where to begin, the{" "}
           <Link href={`/exam/${exam.slug}/learn`} className="text-accent underline">
             learning path
           </Link>{" "}

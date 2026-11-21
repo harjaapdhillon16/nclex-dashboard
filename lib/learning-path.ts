@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { flashcards, questions, studyMaterials, taxonomy, tests } from "@/lib/db/schema";
 
@@ -7,13 +7,19 @@ import { flashcards, questions, studyMaterials, taxonomy, tests } from "@/lib/db
  *
  * A course (exam) is split into UNITS. A unit is a top-level blueprint area
  * (for NCLEX-RN: "Management of Care", "Pharmacological and Parenteral
- * Therapies", ...). Every unit has the same three kinds of material:
+ * Therapies", ...). Which taxonomy rows count as units depends on the exam:
+ *   - category  (NCLEX)                 -> questions.categoryId
+ *   - section   (IELTS, SAT, MCAT, ...) -> questions.categoryId
+ *   - subject   (USMLE, COMLEX, ...)    -> questions.subjectId
+ * Every unit has the same three kinds of material:
  *   1. LESSONS    - study notes / guides / video outlines (study_materials)
  *   2. FLASHCARDS - short recall cards (flashcards)
  *   3. PRACTICE   - questions (questions)
  * and we measure progress ONLY from practice answers, because that is the
  * one thing that actually proves a topic has been learned.
  */
+
+export type UnitKind = "category" | "section" | "subject";
 
 export type UnitStage = "not_started" | "in_progress" | "needs_work" | "strong";
 
@@ -39,6 +45,11 @@ export const STAGE_RULES: Record<UnitStage, string> = {
   strong: "You've answered at least 60% of the unit's questions with 75% accuracy or better.",
 };
 
+/** Name of the startCustomTestAction form field that filters a test to the given unit ids. */
+export function unitFieldName(kind: UnitKind) {
+  return kind === "subject" ? "subjectIds" : "categoryIds";
+}
+
 export type Lesson = {
   id: number;
   kind: string;
@@ -50,6 +61,9 @@ export type Lesson = {
   topicName: string | null;
   topicQuestionCount: number;
 };
+
+/** How many standalone practice questions a learner could draw, per question pool. */
+export type PoolCounts = { all: number; unused: number; incorrect: number; marked: number };
 
 export type Unit = {
   id: number;
@@ -67,6 +81,7 @@ export type Unit = {
   correct: number;
   accuracy: number | null;
   stage: UnitStage;
+  pool: PoolCounts;
 };
 
 export type NextStep = {
@@ -77,7 +92,18 @@ export type NextStep = {
   href: string;
 };
 
+/** Whole-bank usage, UWorld style. Each question lands in exactly one bucket. */
+export type BankUsage = {
+  total: number;
+  correct: number;
+  incorrect: number;
+  /** Seen in a finished test but skipped, and never answered since. */
+  omitted: number;
+  unused: number;
+};
+
 export type LearningPath = {
+  unitKind: UnitKind;
   units: Unit[];
   /** Lessons that exist for the course but can't be tied to a unit. */
   looseLessons: Lesson[];
@@ -90,12 +116,20 @@ export type LearningPath = {
     attempts: number;
     correct: number;
   };
+  bank: BankUsage;
+  /** Pool counts across the whole bank, including questions that sit in no unit. */
+  poolTotals: PoolCounts;
   /** True when the course is a thin preview (no lessons, or very few questions). */
   isEarlyAccess: boolean;
   nextStep: NextStep;
 };
 
-const UNIT_KINDS = ["category", "section"] as const;
+const UNIT_KIND_ORDER: UnitKind[] = ["category", "section", "subject"];
+const UNIT_QUESTION_COLUMN: Record<UnitKind, "category_id" | "subject_id"> = {
+  category: "category_id",
+  section: "category_id",
+  subject: "subject_id",
+};
 
 function stageOf(u: Pick<Unit, "answered" | "questionTotal" | "attempts" | "correct">): UnitStage {
   if (u.answered === 0) return "not_started";
@@ -118,10 +152,16 @@ export async function getLearningPath(
     .where(and(eq(taxonomy.examId, exam.id), eq(taxonomy.status, "active")))
     .orderBy(asc(taxonomy.displayOrder), asc(taxonomy.id));
 
-  const unitRows = taxRows.filter((t) => (UNIT_KINDS as readonly string[]).includes(t.kind));
+  // Units are the first of category / section / subject that has any rows.
+  const unitKind: UnitKind = UNIT_KIND_ORDER.find((k) => taxRows.some((t) => t.kind === k)) ?? "category";
+  const unitCol = UNIT_QUESTION_COLUMN[unitKind];
+  const unitRows = taxRows.filter((t) => t.kind === unitKind);
   const unitIds = new Set(unitRows.map((u) => u.id));
   const topicRows = taxRows.filter((t) => t.kind === "topic");
   const topicName = new Map(topicRows.map((t) => [t.id, t.name]));
+
+  const unitOfQuestion = (g: { categoryId: number | null; subjectId: number | null }) =>
+    unitCol === "subject_id" ? g.subjectId : g.categoryId;
 
   // Questions: standalone practice items per unit and per topic.
   const qByUnit = new Map<number, number>();
@@ -130,33 +170,26 @@ export async function getLearningPath(
   const qGroups = await db
     .select({
       categoryId: questions.categoryId,
+      subjectId: questions.subjectId,
       topicId: questions.topicId,
-      n: sql<number>`count(*)::int`,
-    })
-    .from(questions)
-    .where(and(eq(questions.examId, exam.id), eq(questions.status, "published"), isNull(questions.caseStudyId)))
-    .groupBy(questions.categoryId, questions.topicId);
-  for (const g of qGroups) {
-    if (g.categoryId != null) qByUnit.set(g.categoryId, (qByUnit.get(g.categoryId) ?? 0) + g.n);
-    if (g.topicId != null) qByTopic.set(g.topicId, (qByTopic.get(g.topicId) ?? 0) + g.n);
-  }
-
-  // To place a topic in a unit we also look at case-study questions, so a topic that only has
-  // case-study questions (e.g. maternal topics) still lands in the right unit.
-  const voteRows = await db
-    .select({
-      categoryId: questions.categoryId,
-      topicId: questions.topicId,
+      standalone: sql<boolean>`(${questions.caseStudyId} IS NULL)`,
       n: sql<number>`count(*)::int`,
     })
     .from(questions)
     .where(and(eq(questions.examId, exam.id), eq(questions.status, "published")))
-    .groupBy(questions.categoryId, questions.topicId);
-  for (const g of voteRows) {
-    if (g.topicId == null || g.categoryId == null) continue;
-    const votes = topicToUnitVotes.get(g.topicId) ?? new Map<number, number>();
-    votes.set(g.categoryId, (votes.get(g.categoryId) ?? 0) + g.n);
-    topicToUnitVotes.set(g.topicId, votes);
+    .groupBy(questions.categoryId, questions.subjectId, questions.topicId, sql`(${questions.caseStudyId} IS NULL)`);
+  for (const g of qGroups) {
+    const unitId = unitOfQuestion(g);
+    if (g.standalone) {
+      if (unitId != null) qByUnit.set(unitId, (qByUnit.get(unitId) ?? 0) + g.n);
+      if (g.topicId != null) qByTopic.set(g.topicId, (qByTopic.get(g.topicId) ?? 0) + g.n);
+    }
+    // Case-study questions also vote, so a topic that only has case questions still lands in a unit.
+    if (g.topicId != null && unitId != null) {
+      const votes = topicToUnitVotes.get(g.topicId) ?? new Map<number, number>();
+      votes.set(unitId, (votes.get(unitId) ?? 0) + g.n);
+      topicToUnitVotes.set(g.topicId, votes);
+    }
   }
 
   // Which unit does a topic belong to? Its taxonomy parent if that is a unit,
@@ -225,9 +258,9 @@ export async function getLearningPath(
     .from(flashcards)
     .where(and(eq(flashcards.examId, exam.id), eq(flashcards.status, "published")));
 
-  // Practice progress per unit
+  // Practice progress per unit (every graded attempt counts toward accuracy)
   const progRows = await db.execute<{ unit_id: number | null; answered: number; attempts: number; correct: number }>(sql`
-    SELECT q.category_id AS unit_id,
+    SELECT ${sql.raw("q." + unitCol)} AS unit_id,
       count(DISTINCT ta.question_id)::int AS answered,
       count(*)::int AS attempts,
       count(*) FILTER (WHERE ta.is_correct)::int AS correct
@@ -235,8 +268,63 @@ export async function getLearningPath(
     JOIN questions q ON q.id = ta.question_id
     WHERE ta.user_id = ${userId} AND q.exam_id = ${exam.id}
       AND ta.submitted = true AND ta.response IS NOT NULL
-    GROUP BY q.category_id`);
+    GROUP BY 1`);
   const progByUnit = new Map(progRows.rows.filter((r) => r.unit_id != null).map((r) => [Number(r.unit_id), r]));
+
+  // Per-question pool state, aggregated per unit. Mirrors the pool rules used when a test is built
+  // (unused / incorrect / marked) so the counts shown before starting a test match what you get.
+  const poolRows = await db.execute<{
+    unit_id: number | null;
+    total: number;
+    unused: number;
+    incorrect: number;
+    marked: number;
+    b_correct: number;
+    b_incorrect: number;
+    b_omitted: number;
+    b_unused: number;
+  }>(sql`
+    SELECT s.unit_id,
+      count(*)::int AS total,
+      count(*) FILTER (WHERE s.never_answered)::int AS unused,
+      count(*) FILTER (WHERE s.last_correct = false)::int AS incorrect,
+      count(*) FILTER (WHERE s.is_marked)::int AS marked,
+      count(*) FILTER (WHERE s.last_correct = true)::int AS b_correct,
+      count(*) FILTER (WHERE s.last_correct = false)::int AS b_incorrect,
+      count(*) FILTER (WHERE s.last_correct IS NULL AND s.was_skipped)::int AS b_omitted,
+      count(*) FILTER (WHERE s.last_correct IS NULL AND NOT s.was_skipped)::int AS b_unused
+    FROM (
+      SELECT ${sql.raw("q." + unitCol)} AS unit_id,
+        NOT EXISTS (SELECT 1 FROM test_answers ta WHERE ta.user_id = ${userId} AND ta.question_id = q.id AND ta.response IS NOT NULL) AS never_answered,
+        (SELECT l.is_correct FROM test_answers l WHERE l.user_id = ${userId} AND l.question_id = q.id AND l.is_correct IS NOT NULL ORDER BY l.answered_at DESC NULLS LAST LIMIT 1) AS last_correct,
+        EXISTS (SELECT 1 FROM test_answers sk JOIN tests st ON st.id = sk.test_id WHERE sk.user_id = ${userId} AND sk.question_id = q.id AND sk.response IS NULL AND st.status = 'completed') AS was_skipped,
+        (EXISTS (SELECT 1 FROM bookmarks b WHERE b.user_id = ${userId} AND b.question_id = q.id)
+          OR EXISTS (SELECT 1 FROM test_answers mk WHERE mk.user_id = ${userId} AND mk.question_id = q.id AND mk.marked = true)) AS is_marked
+      FROM questions q
+      WHERE q.exam_id = ${exam.id} AND q.status = 'published' AND q.case_study_id IS NULL
+    ) s
+    GROUP BY s.unit_id`);
+  const poolByUnit = new Map<number, PoolCounts>();
+  const poolTotals: PoolCounts = { all: 0, unused: 0, incorrect: 0, marked: 0 };
+  const bank: BankUsage = { total: 0, correct: 0, incorrect: 0, omitted: 0, unused: 0 };
+  for (const r of poolRows.rows) {
+    const c: PoolCounts = {
+      all: Number(r.total),
+      unused: Number(r.unused),
+      incorrect: Number(r.incorrect),
+      marked: Number(r.marked),
+    };
+    if (r.unit_id != null) poolByUnit.set(Number(r.unit_id), c);
+    poolTotals.all += c.all;
+    poolTotals.unused += c.unused;
+    poolTotals.incorrect += c.incorrect;
+    poolTotals.marked += c.marked;
+    bank.total += Number(r.total);
+    bank.correct += Number(r.b_correct);
+    bank.incorrect += Number(r.b_incorrect);
+    bank.omitted += Number(r.b_omitted);
+    bank.unused += Number(r.b_unused);
+  }
 
   const topicsByUnit = new Map<number, number[]>();
   for (const [tid, uid] of topicUnit) topicsByUnit.set(uid, [...(topicsByUnit.get(uid) ?? []), tid]);
@@ -264,6 +352,7 @@ export async function getLearningPath(
         ...base,
         accuracy: base.attempts ? base.correct / base.attempts : null,
         stage: stageOf(base),
+        pool: poolByUnit.get(u.id) ?? { all: 0, unused: 0, incorrect: 0, marked: 0 },
       } satisfies Unit;
     })
     // Hide empty shells so the learner never lands on a unit with nothing in it.
@@ -290,10 +379,13 @@ export async function getLearningPath(
   const nextStep = pickNextStep(exam, units, totals, open);
 
   return {
+    unitKind,
     units,
     looseLessons,
     totals,
-    isEarlyAccess: totals.lessons === 0 || totals.questions < 50,
+    bank,
+    poolTotals,
+    isEarlyAccess: totals.lessons === 0 || bank.total < 50,
     nextStep,
   };
 }
@@ -378,4 +470,10 @@ function pickNextStep(
 
 export function pct(n: number | null | undefined) {
   return n == null ? 0 : Math.round(n * 100);
+}
+
+/** Whole days from now until a YYYY-MM-DD date (never negative). Kept here so pages stay pure. */
+export function daysUntil(dateStr: string | null | undefined) {
+  if (!dateStr) return null;
+  return Math.max(0, Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86400000));
 }

@@ -1,12 +1,21 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { and, asc, eq, sql } from "drizzle-orm";
-import { ArrowLeft, Award, Clock, Sparkles, Target } from "lucide-react";
+import { and, asc, eq } from "drizzle-orm";
+import { AlertTriangle, ClipboardList, Target, Zap } from "lucide-react";
 import { db } from "@/lib/db";
-import { caseStudies, exams, questions, taxonomy } from "@/lib/db/schema";
+import { exams, taxonomy } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth";
+import { getLearningPath, unitFieldName } from "@/lib/learning-path";
 import { startCustomTestAction } from "../../../actions";
 import { CreateTestForm } from "./create-test-form";
+
+type Preset = {
+  title: string;
+  sub: string;
+  icon: React.ComponentType<{ className?: string }>;
+  disabled?: boolean;
+  fields: Record<string, string>;
+};
 
 export default async function CreateTestPage({
   params,
@@ -17,157 +26,115 @@ export default async function CreateTestPage({
 }) {
   const { slug } = await params;
   const sp = await searchParams;
-  await requireUser();
+  const user = await requireUser();
 
   const [exam] = await db.select().from(exams).where(eq(exams.slug, slug)).limit(1);
   if (!exam) notFound();
 
+  const path = await getLearningPath(user.id, exam);
+  const { units, poolTotals, unitKind } = path;
+
+  // Extra filters that are not the unit axis.
   const taxNodes = await db
-    .select()
+    .select({ id: taxonomy.id, name: taxonomy.name, kind: taxonomy.kind })
     .from(taxonomy)
-    .where(eq(taxonomy.examId, exam.id))
+    .where(and(eq(taxonomy.examId, exam.id), eq(taxonomy.status, "active")))
     .orderBy(asc(taxonomy.displayOrder), asc(taxonomy.name));
-
-  const [{ totalQuestions }] = await db
-    .select({ totalQuestions: sql<number>`count(*)::int` })
-    .from(questions)
-    .where(and(eq(questions.examId, exam.id), eq(questions.status, "published")));
-
-  const casesList = await db
-    .select({ id: caseStudies.id, title: caseStudies.title, difficulty: caseStudies.difficulty })
-    .from(caseStudies)
-    .where(and(eq(caseStudies.examId, exam.id), eq(caseStudies.status, "published")));
-
-  const categories = taxNodes.filter((n) => n.kind === "category" || n.kind === "section");
-  const subjects = taxNodes.filter((n) => n.kind === "subject");
   const systems = taxNodes.filter((n) => n.kind === "system");
-  const topics = taxNodes.filter((n) => n.kind === "topic");
+  const subjects = unitKind === "subject" ? [] : taxNodes.filter((n) => n.kind === "subject");
+
+  const noData = poolTotals.all === 0;
+
+  const presets: Preset[] = [
+    {
+      title: "Quick 10",
+      sub: poolTotals.unused > 0 ? "10 new questions, answers shown as you go" : "10 questions, answers shown as you go",
+      icon: Zap,
+      disabled: noData,
+      fields: { kind: "tutorial", mode: "tutor", pool: "unused", count: String(Math.min(10, poolTotals.all)) },
+    },
+    {
+      title: "Weak areas",
+      sub: path.totals.attempts === 0 ? "Answer a few questions first" : "20 questions from the topics you miss most",
+      icon: Target,
+      disabled: noData || path.totals.attempts === 0,
+      fields: { kind: "weak", mode: "tutor", pool: "all", count: "20" },
+    },
+    {
+      title: "Fix my mistakes",
+      sub: poolTotals.incorrect > 0 ? `Redo ${Math.min(20, poolTotals.incorrect)} you got wrong` : "Nothing wrong yet",
+      icon: AlertTriangle,
+      disabled: poolTotals.incorrect === 0,
+      fields: { kind: "incorrect", mode: "tutor", pool: "incorrect", count: String(Math.min(20, Math.max(poolTotals.incorrect, 1))) },
+    },
+    {
+      title: "Mock exam",
+      sub: `${exam.mockQuestionCount} questions · ${exam.durationMinutes} min, answers at the end`,
+      icon: ClipboardList,
+      disabled: noData,
+      fields: { kind: "mock", mode: "exam", count: String(exam.mockQuestionCount) },
+    },
+  ];
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href={`/exam/${exam.slug}`}
-          className="inline-flex items-center gap-1.5 text-xs font-medium muted hover:text-foreground mb-2"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back to {exam.shortName} home
-        </Link>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Practice {exam.name}</h1>
-            <p className="text-xs sm:text-sm muted max-w-2xl">
-              Pick a ready-made set below, or build your own further down. <strong>Tutor</strong> mode shows the answer and explanation
-              after each question; <strong>Timed</strong> and <strong>Exam</strong> modes hold them until the end.
-              Not sure what to study? Start from the{" "}
-              <Link href={`/exam/${exam.slug}/learn`} className="text-accent underline">
-                learning path
-              </Link>
-              .
-            </p>
-          </div>
-          <span className="chip bg-accent-subtle text-accent border-accent/25">
-            {totalQuestions} Active Questions · {casesList.length} Case Studies
-          </span>
-        </div>
-      </div>
+      <header className="space-y-1">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Practice</h1>
+        <p className="max-w-2xl text-sm muted">
+          Pick a ready-made set, or build your own test below. Not sure what to study? Start from the{" "}
+          <Link href={`/exam/${exam.slug}/learn`} className="text-accent underline">
+            learning path
+          </Link>
+          .
+        </p>
+      </header>
 
       {sp.empty && (
         <div role="alert" className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-xs font-medium">
-          No published questions matched that exact filter combination. Try broadening your category, difficulty, or question-pool selection below.
+          No questions matched that combination. Try a bigger pool or fewer filters.
         </div>
       )}
 
-      {/* One-Click Preset Exams */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <form action={startCustomTestAction} className="panel p-4 flex flex-col justify-between space-y-3">
-          <input type="hidden" name="examSlug" value={exam.slug} />
-          <input type="hidden" name="kind" value="assessment" />
-          <input type="hidden" name="mode" value="exam" />
-          <input type="hidden" name="count" value="100" />
-          <div>
-            <div className="flex items-center gap-2 font-bold text-sm">
-              <Award className="h-4 w-4 text-accent" />
-              100-Question Assessment
-            </div>
-            <p className="text-xs muted mt-1">
-              Original balanced assessment across all client-needs categories, subjects, NGN items, and case studies.
-            </p>
-          </div>
-          <button type="submit" className="btn btn-primary btn-sm w-full">
-            Start 100-Q Assessment
-          </button>
-        </form>
-
-        <form action={startCustomTestAction} className="panel p-4 flex flex-col justify-between space-y-3">
-          <input type="hidden" name="examSlug" value={exam.slug} />
-          <input type="hidden" name="kind" value="mock" />
-          <input type="hidden" name="mode" value="exam" />
-          <input type="hidden" name="count" value={String(exam.mockQuestionCount)} />
-          <div>
-            <div className="flex items-center gap-2 font-bold text-sm">
-              <Clock className="h-4 w-4 text-accent" />
-              Full-Length Mock ({exam.mockQuestionCount} Q)
-            </div>
-            <p className="text-xs muted mt-1">
-              Timed {exam.durationMinutes}-minute simulated examination with no rationale reveal until final submission.
-            </p>
-          </div>
-          <button type="submit" className="btn btn-secondary btn-sm w-full">
-            Launch Full Mock
-          </button>
-        </form>
-
-        <form action={startCustomTestAction} className="panel p-4 flex flex-col justify-between space-y-3">
-          <input type="hidden" name="examSlug" value={exam.slug} />
-          <input type="hidden" name="kind" value="mock" />
-          <input type="hidden" name="mode" value="exam" />
-          <input type="hidden" name="adaptive" value="true" />
-          <input type="hidden" name="count" value="85" />
-          <div>
-            <div className="flex items-center gap-2 font-bold text-sm">
-              <Sparkles className="h-4 w-4 text-accent" />
-              Adaptive (CAT) Simulation
-            </div>
-            <p className="text-xs muted mt-1">
-              Rasch ability estimation with dynamic difficulty adjustment, content balancing, and readiness probability.
-            </p>
-          </div>
-          <button type="submit" className="btn btn-secondary btn-sm w-full">
-            Start Adaptive CAT
-          </button>
-        </form>
-
-        <form action={startCustomTestAction} className="panel p-4 flex flex-col justify-between space-y-3">
-          <input type="hidden" name="examSlug" value={exam.slug} />
-          <input type="hidden" name="kind" value="readiness" />
-          <input type="hidden" name="mode" value="timed" />
-          <input type="hidden" name="count" value="60" />
-          <div>
-            <div className="flex items-center gap-2 font-bold text-sm">
-              <Target className="h-4 w-4 text-accent" />
-              Readiness &amp; Diagnostic (60 Q)
-            </div>
-            <p className="text-xs muted mt-1">
-              Blueprint-weighted readiness check generating a personalized 7-day study plan and topic breakdown.
-            </p>
-          </div>
-          <button type="submit" className="btn btn-secondary btn-sm w-full">
-            Start Readiness Test
-          </button>
-        </form>
+      {/* Presets */}
+      <section aria-label="Quick starts" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {presets.map((p) => (
+          <form key={p.title} action={startCustomTestAction}>
+            <input type="hidden" name="examSlug" value={exam.slug} />
+            {Object.entries(p.fields).map(([k, v]) => (
+              <input key={k} type="hidden" name={k} value={v} />
+            ))}
+            <button
+              type="submit"
+              disabled={p.disabled}
+              className="panel flex h-full w-full flex-col items-start gap-1.5 p-4 text-left transition enabled:hover:border-accent/60 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span className="flex items-center gap-2 text-sm font-bold">
+                <p.icon className="h-4 w-4 text-accent" />
+                {p.title}
+              </span>
+              <span className="text-xs leading-snug muted">{p.sub}</span>
+            </button>
+          </form>
+        ))}
       </section>
 
-      {/* Custom Test Builder Form */}
+      <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wider faint">
+        <span className="h-px flex-1 bg-border" />
+        Or build your own
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
       <CreateTestForm
         examSlug={exam.slug}
-        examName={exam.name}
         questionTypes={exam.questionTypes}
         supportsCases={!!exam.features?.caseStudies}
-        categories={categories}
-        subjects={subjects}
-        systems={systems}
-        topics={topics}
+        supportsAdaptive={!!exam.features?.adaptive}
+        unitField={unitFieldName(unitKind)}
+        unitLabel={unitKind === "subject" ? "Subjects" : exam.axes.includes("category") ? "Categories" : "Sections"}
+        units={units.map((u) => ({ id: u.id, name: u.name, weight: u.weight, counts: u.pool }))}
+        totals={poolTotals}
+        systems={systems.map((s) => ({ id: s.id, name: s.name }))}
+        subjects={subjects.map((s) => ({ id: s.id, name: s.name }))}
         initialTopicId={sp.topicId ? Number(sp.topicId) : undefined}
         initialSystemId={sp.systemId ? Number(sp.systemId) : undefined}
       />

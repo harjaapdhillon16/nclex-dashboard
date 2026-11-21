@@ -1,51 +1,41 @@
-# QREXq — Multi-Exam International Preparation Platform & AUSTY Health Care Analytics
+# QREXq
 
-Comprehensive multi-exam preparation platform (with **NCLEX-RN** as the flagship course across 45+ international examinations in 9 divisions) plus the integrated **AUSTY Health Care Private Limited — Employee Performance, Business Development & Revenue Analytics Module**, built on **Next.js 16.4**, **React 19**, **Tailwind CSS v4**, **uiarc.dev**, and **PostgreSQL (Neon + Drizzle ORM)**.
+Exam-preparation platform in the style of a question bank (UWorld / Boot.camp): learn each topic, practice with exam-style
+questions, then test yourself with mock exams. NCLEX-RN is the most complete course; every other course ships with starter content.
 
----
+Built with Next.js 16, React 19, Tailwind CSS v4, PostgreSQL (Neon) and Drizzle ORM.
 
-## Quick Start
+## What a learner does
+
+1. **Today** – one clear next step, question-bank usage, performance by unit, readiness estimate.
+2. **Learn** – a course is split into units; each unit has lessons, flashcards and practice questions.
+3. **Practice** – build a test (tutor / timed / exam) from a pool (all, unused, incorrect, marked) and the units you choose.
+4. **Mock exams** – full-length timed exams and past test history.
+5. **Progress** – accuracy over time, weakest units and topics.
+
+Staff (`admin`, `reviewer`) also get **Content admin**: content health per course, the question review queue, bulk import and AI drafts.
+
+## Run it
 
 ```bash
-# 1. Install dependencies
 npm install
-
-# 2. Push database schema to Neon PostgreSQL
-npm run db:push
-
-# 3. Seed examination catalogue, question banks, NGN case studies, flashcards, and AUSTY records
-npm run db:seed
-
-# 4. Run development server
-npm run dev
+npm run db:push     # create the schema in the database from .env.local
+npm run db:seed     # idempotent: courses, questions, lessons, flashcards, plans, demo accounts
+npm run dev         # http://localhost:3000
 ```
 
-Open `http://localhost:3000`.
+Demo accounts (password is `SEED_PASSWORD` in `.env.local`): `student@qrexq.test`, `reviewer@qrexq.test`, `admin@qrexq.test`.
 
-### Demo Accounts
+## Where things live
 
-On `/login`, use **One-Click Demo Role Access** (or sign in with `SEED_PASSWORD` from `.env.local`):
-- **Student:** `student@qrexq.test`
-- **Clinical Reviewer:** `reviewer@qrexq.test`
-- **Super Admin:** `admin@qrexq.test`
+| Area | Location |
+|---|---|
+| Learner app | `app/(app)/dashboard`, `app/(app)/exam/[slug]/*` |
+| Test player and results | `app/test/[id]`, `app/(app)/test/[id]/results` |
+| Admin | `app/(app)/admin/*` |
+| Learning path (units, progress, next step) | `lib/learning-path.ts` |
+| Test creation and analytics | `lib/tests.ts` |
+| Course catalogue and seed content | `lib/seed/catalog.ts`, `lib/seed/content/*` |
+| Database schema | `lib/db/schema.ts` |
 
----
-
-## Core Modules
-
-1. **Multi-Exam International Preparation (`/dashboard`, `/catalog/[category]`, `/exam/[slug]`)**
-   - **9 Exam Divisions & 45+ Courses:** Nursing (`NCLEX-RN`, `NCLEX-PN`, `FNP`, `Clinical Medical Mathematics`), Medical (`USMLE Step 1/2 CK/3`, `COMLEX 1/2`, `UKMLA`, `PLAB`, `ABIM`, `ABFM`), Dental (`DAT`, `INBDE`, `NBDE`, `Dental Anatomy`, `Dental Sciences`), Pharmacy (`NAPLEX`, `MPJE`, `CPJE`), Physician Assistant (`PANCE`, `PANRE`), English Language (`IELTS Academic`, `IELTS General`, `OET Nursing`, `OET Medicine`, `PTE Academic`, `TOEFL iBT`), College Entrance (`SAT`, `ACT`, `AP`), Graduate Admission (`MCAT`, `GRE`, `GMAT`), and Professional Certification (`CPA`, `CFA`, `CMA`, `LSAT`, `MBE`).
-   - **12 Question Formats:** Single Best Answer (`mcq`), Select All That Apply (`sata`), NGN Extended Multiple Response (`multiple_response`), Ordered Response (`ordered`), Matrix/Grid (`matrix`), NGN Bow-Tie (`bowtie`), Highlight Text (`highlight`), Drop-Down Cloze (`cloze`), Trend (`trend`), Dosage/Numeric Calculation (`numeric`), Writing (`writing`), and Speaking (`speaking`).
-   - **NGN Clinical Judgment Case Studies (`/exam/[slug]/cases`):** 8 unfolding 6-step case studies with progressive EHR tab disclosure across the 6 NCSBN Clinical Judgment Measurement Model (NCJMM) steps.
-   - **Test Modes (`/exam/[slug]/create`, `/test/[id]`, `/test/[id]/results`):** Tutor Mode, Timed Mode, Exam Mode, 100-Question Balanced Practice Assessment, Full-Length Mock Exam, Rasch Computerized Adaptive Testing (CAT) Simulation, Diagnostic & Readiness Assessments, Weak-Area Tests, and 18-section clinical rationale breakdowns.
-
-2. **Admin, Reviewer & AI Content Governance (`/admin`, `/admin/questions`, `/admin/ai`, `/admin/courses`, `/admin/import-export`)**
-   - **8-Stage Review Pipeline:** `Draft` → `Initial Review` → `Clinical Review` → `Editorial Review` → `Approved` → `Published` → `Archived` (plus `Revision Requested` / `Rejected`) with separation of duties and audit history.
-   - **Smart AI Question Generator:** Generates original draft items with SHA-256 duplicate protection and job logging.
-   - **Bulk Import & Export:** Excel (`.xlsx`), CSV, and JSON import with automated validation reports and one-click exports.
-
-3. **AUSTY Health Care — Employee Performance, Business Development & Revenue Analytics (`/austy`)**
-   - **Employee Management:** Unique Employee ID (`AUSTY-EMP-*`), Unique Employee Reference ID (`AREF-IN-*`), 5 hierarchy roles (`State Business Manager`, `District Business Manager`, `Team Leader`, `Business Development Executive`, `Field Executive`), territory assignment, and targets.
-   - **Pan-India State, District & City Tracking:** Doctors, pharmacies, diagnostic labs, hospitals, ambulances, and rental equipment vendors with duplicate registration & attribution lock.
-   - **100-Point Employee Performance Score (EPS) & Monthly Incentive Slabs:** Configurable weights (30/30/20/10/10) and incentive slabs (`Below 50%` → ₹0 up to `100%+` → ₹6,000) with 6-stage payment approval workflow (`Calculated` → `Pending Verification` → `Approved` / `Rejected` → `Payment Processing` → `Paid`).
-   - **7-Category Revenue Ledger & 8 Downloadable Enterprise Reports:** Excel (`.xlsx`), CSV, and print/PDF exports.
+All questions and lessons are original writing for practice purposes.

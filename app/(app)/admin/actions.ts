@@ -1,14 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   aiJobs,
-  caseStudies,
-  examCategories,
   exams,
-  flashcards,
   questionReports,
   questionReviews,
   questions,
@@ -22,7 +19,7 @@ import {
 import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/security";
 import { generateQuestions } from "@/lib/ai";
-import { importQuestions, TaxonomyResolver } from "@/lib/seed/importer";
+import { importQuestions } from "@/lib/seed/importer";
 import { FEATURE_KEYS, type FeatureKey } from "@/lib/seed/catalog";
 import type { Difficulty, QuestionType, SeedQuestion } from "@/lib/questions/types";
 
@@ -344,9 +341,21 @@ export async function createOrUpdateExamCourseAction(formData: FormData) {
     const title = String(formData.get("title") ?? "").trim();
     const summary = String(formData.get("summary") ?? "").trim();
     const body = String(formData.get("body") ?? "").trim();
+    // Optional: link the lesson to an existing topic (by name) so it shows up under the right unit.
+    const topicName = String(formData.get("topic") ?? "").trim();
+    let topicId: number | null = null;
+    if (examId && topicName) {
+      const [t] = await db
+        .select({ id: taxonomy.id })
+        .from(taxonomy)
+        .where(and(eq(taxonomy.examId, examId), eq(taxonomy.kind, "topic"), sql`lower(${taxonomy.name}) = ${topicName.toLowerCase()}`))
+        .limit(1);
+      topicId = t?.id ?? null;
+    }
     if (examId && title) {
       await db.insert(studyMaterials).values({
         examId,
+        topicId,
         kind,
         title,
         summary,
