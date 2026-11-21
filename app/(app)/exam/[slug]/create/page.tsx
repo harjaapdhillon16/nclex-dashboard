@@ -51,13 +51,19 @@ export default async function CreateTestPage({
           className="inline-flex items-center gap-1.5 text-xs font-medium muted hover:text-foreground mb-2"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Back to {exam.shortName} Dashboard
+          Back to {exam.shortName} home
         </Link>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Create {exam.name} Practice Test</h1>
-            <p className="text-xs sm:text-sm muted">
-              Configure question pool, tutor/timed/exam mode, blueprint categories, body systems, difficulty, and NGN item formats.
+            <h1 className="text-2xl font-bold tracking-tight">Practice {exam.name}</h1>
+            <p className="text-xs sm:text-sm muted max-w-2xl">
+              Pick a ready-made set below, or build your own further down. <strong>Tutor</strong> mode shows the answer and explanation
+              after each question; <strong>Timed</strong> and <strong>Exam</strong> modes hold them until the end.
+              Not sure what to study? Start from the{" "}
+              <Link href={`/exam/${exam.slug}/learn`} className="text-accent underline">
+                learning path
+              </Link>
+              .
             </p>
           </div>
           <span className="chip bg-accent-subtle text-accent border-accent/25">

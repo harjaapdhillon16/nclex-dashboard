@@ -16,6 +16,7 @@ import {
   ClipboardList,
   CreditCard,
   FileSpreadsheet,
+  FileText,
   FlaskConical,
   GraduationCap,
   IndianRupee,
@@ -25,6 +26,7 @@ import {
   MapPin,
   Menu,
   Moon,
+  PenLine,
   PlusCircle,
   ShieldAlert,
   Sparkles,
@@ -51,6 +53,8 @@ export type ShellExam = {
   name: string;
   shortName: string;
   categorySlug?: string;
+  /** Whether this exam has NGN-style case studies (controls the "Case studies" tool link). */
+  hasCases?: boolean;
 };
 
 const TEXT_SCALES = [
@@ -144,17 +148,20 @@ export function AppShell({
   }
 
   const slug = currentExam.slug;
+  // Five main places, in the order a learner uses them. Everything else is a "tool".
   const studyPrimaryNav = [
-    { href: `/exam/${slug}`, label: `${currentExam.shortName} Home`, icon: Activity },
-    { href: `/exam/${slug}/create`, label: "Practice & Build Test", icon: PlusCircle },
-    { href: `/exam/${slug}/tests`, label: "Mock Exams & History", icon: ClipboardList },
-    { href: `/exam/${slug}/cases`, label: "NGN Case Studies", icon: FlaskConical },
-    { href: `/exam/${slug}/study`, label: "Study Notes & Guides", icon: BookOpen },
+    { href: `/exam/${slug}`, label: "Today", hint: "Your next step", icon: Activity },
+    { href: `/exam/${slug}/learn`, label: "Learn", hint: "Lessons, flashcards, practice by unit", icon: BookOpen },
+    { href: `/exam/${slug}/create`, label: "Practice", hint: "Questions with instant feedback", icon: PenLine },
+    { href: `/exam/${slug}/tests`, label: "Mock exams", hint: "Timed tests and your history", icon: ClipboardList },
+    { href: `/exam/${slug}/analytics`, label: "Progress", hint: "Scores and weak spots", icon: BarChart3 },
+  ];
+  const studyToolsNav = [
     { href: `/exam/${slug}/flashcards`, label: "Flashcards", icon: Layers },
-    { href: `/exam/${slug}/review`, label: "Question Bank Review", icon: CheckSquare },
-    { href: `/exam/${slug}/analytics`, label: "Analytics & Readiness", icon: BarChart3 },
-    { href: `/exam/${slug}/assistant`, label: "AI Study Tutor", icon: Bot },
-    { href: "/dashboard", label: "All 45+ Exam Courses", icon: LayoutDashboard },
+    ...(currentExam.hasCases ? [{ href: `/exam/${slug}/cases`, label: "Case studies", icon: FlaskConical }] : []),
+    { href: `/exam/${slug}/study`, label: "All study notes", icon: FileText },
+    { href: `/exam/${slug}/review`, label: "Review my answers", icon: CheckSquare },
+    { href: `/exam/${slug}/assistant`, label: "Ask the AI tutor", icon: Bot },
   ];
 
   const austyNav = [
@@ -196,7 +203,8 @@ export function AppShell({
           </Link>
         </div>
 
-        {/* Workspace Switcher Pill */}
+        {/* Workspace switcher: learners only ever see exam prep. Staff also get the admin and AUSTY areas. */}
+        {isStaff && (
         <div className="grid grid-cols-3 gap-1 rounded-xl bg-white/10 p-1 text-[11px] font-semibold">
           <Link
             href={`/exam/${slug}`}
@@ -238,12 +246,13 @@ export function AppShell({
             </Link>
           )}
         </div>
+        )}
 
         {/* Course Selector only shown in Exam Prep workspace */}
         {activeWorkspace === "study" && (
           <div className="px-1">
             <label htmlFor="sidebar-exam-switch" className="block px-1 mb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
-              Active Course
+              Course
             </label>
             <select
               id="sidebar-exam-switch"
@@ -265,28 +274,63 @@ export function AppShell({
 
         {/* Active Workspace Navigation */}
         {activeWorkspace === "study" && (
-          <nav aria-label="Exam preparation navigation" className="space-y-1">
-            {studyPrimaryNav.map((item) => {
-              const Icon = item.icon;
-              const active = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={onNavigate}
-                  className={`flex items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition ${
-                    active ? "bg-white/15 text-white font-semibold" : "text-sidebar-fg/85 hover:bg-white/10 hover:text-white"
-                  }`}
-                >
-                  <span className="flex items-center gap-2.5">
+          <>
+            <nav aria-label="Exam preparation navigation" className="space-y-1">
+              {studyPrimaryNav.map((item) => {
+                const Icon = item.icon;
+                const active =
+                  item.href === `/exam/${slug}` ? pathname === item.href : pathname.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={onNavigate}
+                    aria-current={active ? "page" : undefined}
+                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition ${
+                      active ? "bg-white/15 text-white" : "text-sidebar-fg/85 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
                     <Icon className="h-4 w-4 shrink-0" />
-                    <span>{item.label}</span>
-                  </span>
-                  {active && <ChevronRight className="h-3.5 w-3.5 opacity-75" />}
-                </Link>
-              );
-            })}
-          </nav>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold leading-tight">{item.label}</span>
+                      <span className="block truncate text-[11px] font-normal text-sidebar-muted">{item.hint}</span>
+                    </span>
+                  </Link>
+                );
+              })}
+            </nav>
+
+            <nav aria-label="Study tools" className="space-y-0.5">
+              <div className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
+                Extra tools
+              </div>
+              {studyToolsNav.map((item) => {
+                const Icon = item.icon;
+                const active = pathname.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={onNavigate}
+                    className={`flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                      active ? "bg-white/15 text-white" : "text-sidebar-fg/80 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5 shrink-0" />
+                    {item.label}
+                  </Link>
+                );
+              })}
+              <Link
+                href="/dashboard"
+                onClick={onNavigate}
+                className="mt-1 flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-xs font-medium text-sidebar-fg/80 hover:bg-white/10 hover:text-white"
+              >
+                <LayoutDashboard className="h-3.5 w-3.5 shrink-0" />
+                My courses / add a course
+              </Link>
+            </nav>
+          </>
         )}
 
         {activeWorkspace === "austy" && (
@@ -521,7 +565,7 @@ export function AppShell({
         <footer className="no-print border-t border-border px-4 py-4 sm:px-6 text-xs muted">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <p>
-              <strong>QREXq International Exam Preparation &amp; AUSTY Health Care Analytics</strong> — Independent educational platform.
+              <strong>QREXq Exam Preparation</strong> — Independent educational platform.
             </p>
             <p className="faint">
               Not affiliated with or endorsed by NCSBN, Pearson VUE, NBME, IELTS, OET, ETS, AAMC, College Board, or AICPA.

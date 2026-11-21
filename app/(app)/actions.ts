@@ -88,7 +88,12 @@ export async function startCustomTestAction(formData: FormData) {
 
   const customName = String(formData.get("name") ?? "").trim() || undefined;
   let created = await createTest(user.id, exam, kind, cfg, customName);
-  // Fallback to "all" pool if a filtered pool (e.g. incorrect/marked/unused) has 0 matching items yet
+  // A filtered pool (e.g. "unused") can run dry. First retry the SAME unit/topic filters against the
+  // full pool so "practice this unit" never silently turns into a test on a different unit.
+  if (!created && cfg.pool && cfg.pool !== "all") {
+    created = await createTest(user.id, exam, kind, { ...cfg, pool: "all" }, customName);
+  }
+  // Last resort: drop every filter.
   if (!created && cfg.pool && cfg.pool !== "all") {
     created = await createTest(user.id, exam, kind, { ...cfg, pool: "all", categoryIds: [], subjectIds: [], systemIds: [], topicIds: [], difficulties: [], types: [], tags: [] }, customName);
   }

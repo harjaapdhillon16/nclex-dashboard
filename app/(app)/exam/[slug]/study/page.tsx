@@ -23,20 +23,11 @@ export default async function ExamStudyMaterialsPage({
   if (!exam) notFound();
 
   const taxMap = await taxonomyNames(exam.id);
-  let mats = await db
+  const mats = await db
     .select()
     .from(studyMaterials)
     .where(and(eq(studyMaterials.examId, exam.id), eq(studyMaterials.status, "published")))
     .orderBy(asc(studyMaterials.id));
-
-  if (mats.length === 0) {
-    mats = await db
-      .select()
-      .from(studyMaterials)
-      .where(eq(studyMaterials.status, "published"))
-      .orderBy(asc(studyMaterials.id))
-      .limit(20);
-  }
 
   const filtered = kind ? mats.filter((m) => m.kind === kind) : mats;
 
@@ -50,9 +41,13 @@ export default async function ExamStudyMaterialsPage({
           <ArrowLeft className="h-3.5 w-3.5" />
           Back to {exam.shortName} Home
         </Link>
-        <h1 className="text-2xl font-bold tracking-tight">{exam.name} — Study Library</h1>
-        <p className="text-xs sm:text-sm muted">
-          Click any study note, high-yield reference guide, or video lecture outline below to expand its formatted guide.
+        <h1 className="text-2xl font-bold tracking-tight">{exam.shortName} — all study notes</h1>
+        <p className="text-xs sm:text-sm muted max-w-2xl">
+          Every lesson for this course in one list. If you're not sure where to begin, the{" "}
+          <Link href={`/exam/${exam.slug}/learn`} className="text-accent underline">
+            learning path
+          </Link>{" "}
+          puts them in order for you.
         </p>
       </div>
 
@@ -79,6 +74,9 @@ export default async function ExamStudyMaterialsPage({
       </div>
 
       {/* Progressive Disclosure Accordion List */}
+      {filtered.length === 0 && (
+        <div className="panel panel-pad text-sm muted">There are no study notes for {exam.shortName} yet.</div>
+      )}
       <div className="space-y-3">
         {filtered.map((m, idx) => {
           const topicName = m.topicId ? taxMap.get(m.topicId)?.name : null;

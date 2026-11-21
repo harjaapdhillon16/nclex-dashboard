@@ -5,15 +5,19 @@ import { ArrowLeft, Layers } from "lucide-react";
 import { db } from "@/lib/db";
 import { exams, flashcardProgress, flashcards } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth";
+import { getLearningPath } from "@/lib/learning-path";
 import { gradeFlashcardAction } from "../../../actions";
 import { MarkdownText, renderInlineMarkdown } from "@/components/markdown-text";
 
 export default async function ExamFlashcardsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ unit?: string }>;
 }) {
   const { slug } = await params;
+  const { unit: unitParam } = await searchParams;
   const user = await requireUser();
 
   const [exam] = await db.select().from(exams).where(eq(exams.slug, slug)).limit(1);
@@ -25,8 +29,12 @@ export default async function ExamFlashcardsPage({
     .where(and(eq(flashcards.examId, exam.id), eq(flashcards.status, "published")))
     .orderBy(asc(flashcards.id));
 
-  if (cards.length === 0) {
-    cards = await db.select().from(flashcards).orderBy(asc(flashcards.id)).limit(40);
+  // Optional filter: only the cards that belong to one learning-path unit.
+  const path = await getLearningPath(user.id, exam);
+  const unit = unitParam ? path.units.find((u) => String(u.id) === unitParam) : undefined;
+  if (unit) {
+    const topicSet = new Set(unit.topicIds);
+    cards = cards.filter((c) => c.topicId != null && topicSet.has(c.topicId));
   }
 
   const progRows = await db.select().from(flashcardProgress).where(eq(flashcardProgress.userId, user.id));
@@ -38,21 +46,38 @@ export default async function ExamFlashcardsPage({
     <div className="space-y-6">
       <div>
         <Link
-          href={`/exam/${exam.slug}`}
+          href={unit ? `/exam/${exam.slug}/learn/${unit.id}` : `/exam/${exam.slug}`}
           className="inline-flex items-center gap-1.5 text-xs font-medium muted hover:text-foreground mb-1.5"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Back to {exam.shortName} Home
+          {unit ? `Back to ${unit.name}` : `Back to ${exam.shortName} Home`}
         </Link>
-        <h1 className="text-2xl font-bold tracking-tight">{exam.name} — Spaced-Repetition Flashcards</h1>
-        <p className="text-xs sm:text-sm muted">
-          Master high-yield pharmacology, lab values, antidotes, and clinical frameworks across 5 Leitner memory boxes.
+        <h1 className="text-2xl font-bold tracking-tight">
+          {unit ? `${unit.name} — Flashcards` : `${exam.shortName} Flashcards`}
+        </h1>
+        <p className="text-xs sm:text-sm muted max-w-2xl">
+          Read the front, try to answer in your head, then flip the card. Tap <strong>Again</strong> if you missed it (it comes back in
+          minutes), <strong>Good</strong> if you got it (it comes back in a day or more), <strong>Easy</strong> to push it further out.
+          {unit && (
+            <>
+              {" "}
+              <Link href={`/exam/${exam.slug}/flashcards`} className="text-accent underline">
+                Show all {exam.shortName} cards
+              </Link>
+            </>
+          )}
         </p>
       </div>
 
+      {cards.length === 0 && (
+        <div className="panel panel-pad text-sm muted">
+          There are no flashcards for {unit ? "this unit" : exam.shortName} yet.
+        </div>
+      )}
+
       {/* Leitner Box Summary */}
       <div className="grid grid-cols-5 gap-3">
-        {["Box 0 (New)", "Box 1 (1d)", "Box 2 (3d)", "Box 3 (7d)", "Box 4 (Mastered)"].map((label, b) => (
+        {["New", "Learning", "Reviewing", "Almost there", "Mastered"].map((label, b) => (
           <div key={label} className="panel p-3.5 text-center">
             <div className="text-xl font-bold text-accent">{boxCounts[b]}</div>
             <div className="text-[11px] muted mt-0.5">{label}</div>
