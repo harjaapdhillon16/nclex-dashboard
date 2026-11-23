@@ -2,6 +2,9 @@
 @layer properties {
   @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {
     *, :before, :after, ::backdrop {
+      --tw-translate-x: 0;
+      --tw-translate-y: 0;
+      --tw-translate-z: 0;
       --tw-rotate-x: initial;
       --tw-rotate-y: initial;
       --tw-rotate-z: initial;
@@ -706,6 +709,10 @@
     top: 0;
   }
 
+  .top-1\/2 {
+    top: 50%;
+  }
+
   .top-2 {
     top: calc(var(--spacing) * 2);
   }
@@ -942,6 +949,10 @@
     display: table;
   }
 
+  .aspect-\[3\/2\] {
+    aspect-ratio: 3 / 2;
+  }
+
   .h-1 {
     height: var(--spacing);
   }
@@ -1010,6 +1021,10 @@
     height: calc(var(--spacing) * 36);
   }
 
+  .h-auto {
+    height: auto;
+  }
+
   .h-fit {
     height: fit-content;
   }
@@ -1032,6 +1047,10 @@
 
   .max-h-96 {
     max-height: calc(var(--spacing) * 96);
+  }
+
+  .max-h-\[28rem\] {
+    max-height: 28rem;
   }
 
   .max-h-\[460px\] {
@@ -1122,6 +1141,10 @@
     width: calc(var(--spacing) * 72);
   }
 
+  .w-auto {
+    width: auto;
+  }
+
   .w-full {
     width: 100%;
   }
@@ -1184,6 +1207,11 @@
 
   .grow {
     flex-grow: 1;
+  }
+
+  .-translate-y-1\/2 {
+    --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);
+    translate: var(--tw-translate-x) var(--tw-translate-y);
   }
 
   .-rotate-90 {
@@ -1372,6 +1400,10 @@
     margin-block-end: calc(calc(var(--spacing) * 8) * calc(1 - var(--tw-space-y-reverse)));
   }
 
+  .gap-x-3 {
+    column-gap: calc(var(--spacing) * 3);
+  }
+
   .gap-x-4 {
     column-gap: calc(var(--spacing) * 4);
   }
@@ -1386,6 +1418,10 @@
 
   .gap-y-0\.5 {
     row-gap: calc(var(--spacing) * .5);
+  }
+
+  .gap-y-1 {
+    row-gap: var(--spacing);
   }
 
   .gap-y-1\.5 {
@@ -1968,6 +2004,10 @@
     stroke: var(--color-rose-500);
   }
 
+  .object-cover {
+    object-fit: cover;
+  }
+
   .p-0 {
     padding: 0;
   }
@@ -2148,6 +2188,10 @@
     padding-left: calc(var(--spacing) * 8);
   }
 
+  .pl-9 {
+    padding-left: calc(var(--spacing) * 9);
+  }
+
   .pl-10 {
     padding-left: calc(var(--spacing) * 10);
   }
@@ -2268,6 +2312,11 @@
   .tracking-tight {
     --tw-tracking: var(--tracking-tight);
     letter-spacing: var(--tracking-tight);
+  }
+
+  .tracking-wide {
+    --tw-tracking: var(--tracking-wide);
+    letter-spacing: var(--tracking-wide);
   }
 
   .tracking-wider {
@@ -2445,6 +2494,10 @@
     opacity: .5;
   }
 
+  .opacity-55 {
+    opacity: .55;
+  }
+
   .opacity-60 {
     opacity: .6;
   }
@@ -2558,6 +2611,16 @@
     @supports (color: color-mix(in lab, red, red)) {
       .hover\:border-accent\/50:hover {
         border-color: color-mix(in oklab, var(--accent) 50%, transparent);
+      }
+    }
+
+    .hover\:border-accent\/60:hover {
+      border-color: var(--accent);
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\:border-accent\/60:hover {
+        border-color: color-mix(in oklab, var(--accent) 60%, transparent);
       }
     }
 
@@ -2865,6 +2928,10 @@
       inset-block: 0;
     }
 
+    .lg\:col-span-1 {
+      grid-column: span 1 / span 1;
+    }
+
     .lg\:col-span-2 {
       grid-column: span 2 / span 2;
     }
@@ -2942,6 +3009,12 @@
     }
   }
 
+  @media (min-width: 80rem) {
+    .xl\:grid-cols-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
   @media (prefers-color-scheme: dark) {
     .dark\:text-amber-300 {
       color: var(--color-amber-300);
@@ -2966,6 +3039,14 @@
     .dark\:text-rose-400 {
       color: var(--color-rose-400);
     }
+  }
+
+  .\[\&\>svg\]\:h-full\! > svg {
+    height: 100% !important;
+  }
+
+  .\[\&\>svg\]\:w-full\! > svg {
+    width: 100% !important;
   }
 }
 
@@ -3532,6 +3613,24 @@ dialog::backdrop {
   body {
     background: #fff;
   }
+}
+
+@property --tw-translate-x {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --tw-translate-y {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --tw-translate-z {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
 }
 
 @property --tw-rotate-x {

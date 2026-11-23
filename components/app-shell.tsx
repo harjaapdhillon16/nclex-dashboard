@@ -10,10 +10,13 @@ import {
   Bot,
   BookOpen,
   CheckSquare,
+  ClipboardCheck,
   ClipboardList,
   FileSpreadsheet,
+  FileText,
   FlaskConical,
   GraduationCap,
+  Images,
   Layers,
   LogOut,
   Menu,
@@ -45,6 +48,9 @@ export type ShellExam = {
   categorySlug?: string;
   /** Whether this exam has case studies (controls the "Case studies" tool link). */
   hasCases?: boolean;
+  /** Whether this course has cheat sheets / a medical image library (controls the tool links). */
+  hasCheatSheets?: boolean;
+  hasImages?: boolean;
 };
 
 const TEXT_SCALES = [
@@ -133,11 +139,14 @@ export function AppShell({
     { href: `/exam/${slug}`, label: "Today", hint: "Your next step", icon: Activity },
     { href: `/exam/${slug}/learn`, label: "Learn", hint: "Lessons, flashcards, practice by unit", icon: BookOpen },
     { href: `/exam/${slug}/create`, label: "Practice", hint: "Questions with instant feedback", icon: PenLine },
+    { href: `/exam/${slug}/assessments`, label: "Assessments", hint: "Check where you stand", icon: ClipboardCheck },
     { href: `/exam/${slug}/tests`, label: "Mock exams", hint: "Timed tests and your history", icon: ClipboardList },
     { href: `/exam/${slug}/analytics`, label: "Progress", hint: "Scores and weak spots", icon: BarChart3 },
   ];
   const toolsNav = [
+    ...(currentExam.hasCheatSheets ? [{ href: `/exam/${slug}/cheat-sheets`, label: "Cheat sheets", icon: FileText }] : []),
     { href: `/exam/${slug}/flashcards`, label: "Flashcards", icon: Layers },
+    ...(currentExam.hasImages ? [{ href: `/exam/${slug}/images`, label: "Medical images", icon: Images }] : []),
     ...(currentExam.hasCases ? [{ href: `/exam/${slug}/cases`, label: "Case studies", icon: FlaskConical }] : []),
     { href: `/exam/${slug}/review`, label: "Review my answers", icon: CheckSquare },
     { href: `/exam/${slug}/assistant`, label: "Ask the AI tutor", icon: Bot },

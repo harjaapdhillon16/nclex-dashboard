@@ -201,6 +201,25 @@ export const flashcardProgress = pgTable("flashcard_progress", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.userId, t.flashcardId] })]);
 
+export const medicalImages = pgTable("medical_images", {
+  id: serial("id").primaryKey(),
+  examId: integer("exam_id").notNull().references(() => exams.id, { onDelete: "cascade" }),
+  /** Key of a code-generated figure (see lib/medical-figures/registry.ts). Null when imageUrl is used. */
+  figureKey: text("figure_key"),
+  /** Optional externally hosted / uploaded image (photograph, radiograph…). */
+  imageUrl: text("image_url"),
+  category: text("category").notNull(),
+  title: text("title").notNull(),
+  summary: text("summary"),
+  body: text("body"),
+  altText: text("alt_text"),
+  credit: text("credit"),
+  tags: text("tags").array().notNull().default([]),
+  status: text("status").notNull().default("published"),
+  displayOrder: integer("display_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [uniqueIndex("medical_images_exam_key_idx").on(t.examId, t.figureKey), index("medical_images_exam_idx").on(t.examId, t.category)]);
+
 export const labValues = pgTable("lab_values", {
   id: serial("id").primaryKey(),
   grp: text("grp").notNull(),

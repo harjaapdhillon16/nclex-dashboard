@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 import { ArrowLeft, BookOpen, ChevronDown, Clock, FileText, Video } from "lucide-react";
 import { db } from "@/lib/db";
 import { exams, studyMaterials } from "@/lib/db/schema";
@@ -26,7 +26,7 @@ export default async function ExamStudyMaterialsPage({
   const mats = await db
     .select()
     .from(studyMaterials)
-    .where(and(eq(studyMaterials.examId, exam.id), eq(studyMaterials.status, "published")))
+    .where(and(eq(studyMaterials.examId, exam.id), eq(studyMaterials.status, "published"), ne(studyMaterials.kind, "cheatsheet")))
     .orderBy(asc(studyMaterials.id));
 
   const filtered = kind ? mats.filter((m) => m.kind === kind) : mats;

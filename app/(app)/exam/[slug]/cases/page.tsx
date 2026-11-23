@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { and, asc, eq } from "drizzle-orm";
-import { ArrowLeft, FlaskConical, Play, Sparkles } from "lucide-react";
+import { and, asc, desc, eq } from "drizzle-orm";
+import { ArrowLeft, CheckCircle2, FlaskConical, Play, RotateCcw, Sparkles } from "lucide-react";
 import { db } from "@/lib/db";
-import { caseStudies, exams } from "@/lib/db/schema";
+import { caseStudies, exams, results, tests } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth";
 import { NCJMM_LABELS, NCJMM_STEPS, type CaseSection, type PatientInfo } from "@/lib/questions/types";
 import { startCustomTestAction } from "../../../actions";
@@ -14,7 +14,7 @@ export default async function ExamCaseStudiesPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  await requireUser();
+  const user = await requireUser();
 
   const [exam] = await db.select().from(exams).where(eq(exams.slug, slug)).limit(1);
   if (!exam) notFound();
@@ -24,6 +24,20 @@ export default async function ExamCaseStudiesPage({
     .from(caseStudies)
     .where(and(eq(caseStudies.examId, exam.id), eq(caseStudies.status, "published")))
     .orderBy(asc(caseStudies.id));
+
+  // Your latest attempt at each case (any mode).
+  const attempts = await db
+    .select({ id: tests.id, status: tests.status, config: tests.config, percent: results.percent })
+    .from(tests)
+    .leftJoin(results, eq(results.testId, tests.id))
+    .where(and(eq(tests.userId, user.id), eq(tests.examId, exam.id), eq(tests.kind, "case_study")))
+    .orderBy(desc(tests.startedAt));
+  const latestByCase = new Map<number, (typeof attempts)[number]>();
+  for (const a of attempts) {
+    const cid = (a.config as { caseStudyId?: number } | null)?.caseStudyId;
+    if (cid && !latestByCase.has(cid)) latestByCase.set(cid, a);
+  }
+  const doneCount = [...latestByCase.values()].filter((a) => a.status === "completed").length;
 
   return (
     <div className="space-y-6">
@@ -43,7 +57,7 @@ export default async function ExamCaseStudiesPage({
             </p>
           </div>
           <span className="chip bg-accent-subtle text-accent border-accent/25">
-            {cases.length} Unfolding 6-Question Cases
+            {doneCount} of {cases.length} cases completed
           </span>
         </div>
       </div>
@@ -105,6 +119,23 @@ export default async function ExamCaseStudiesPage({
                     ))}
                   </div>
                 </div>
+
+                {(() => {
+                  const att = latestByCase.get(cs.id);
+                  if (!att) return null;
+                  const done = att.status === "completed";
+                  return (
+                    <div className="flex items-center justify-between gap-2 rounded-xl bg-muted/50 px-3 py-2 text-xs">
+                      <span className="inline-flex items-center gap-1.5 font-semibold">
+                        {done ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> : <RotateCcw className="h-3.5 w-3.5 text-amber-500" />}
+                        {done ? `Completed · ${Math.round(att.percent ?? 0)}%` : "In progress"}
+                      </span>
+                      <Link href={done ? `/test/${att.id}/results` : `/test/${att.id}`} className="font-semibold text-accent hover:underline">
+                        {done ? "Review results" : "Resume"}
+                      </Link>
+                    </div>
+                  );
+                })()}
 
                 <div className="flex items-center gap-2 pt-3 border-t border-border">
                   <form action={startCustomTestAction} className="flex-1">

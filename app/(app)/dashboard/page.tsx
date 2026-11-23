@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { ArrowRight, CheckCircle2, ChevronDown, Plus } from "lucide-react";
 import { db } from "@/lib/db";
 import { enrollments, examCategories, exams, questions, studyMaterials } from "@/lib/db/schema";
@@ -28,7 +28,7 @@ export default async function DashboardPage() {
   const lessonCounts = await db
     .select({ examId: studyMaterials.examId, n: sql<number>`count(*)::int` })
     .from(studyMaterials)
-    .where(eq(studyMaterials.status, "published"))
+    .where(and(eq(studyMaterials.status, "published"), ne(studyMaterials.kind, "cheatsheet")))
     .groupBy(studyMaterials.examId);
   const lessonsByExam = new Map(lessonCounts.map((r) => [r.examId, r.n]));
 

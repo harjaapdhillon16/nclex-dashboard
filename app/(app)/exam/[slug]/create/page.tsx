@@ -6,6 +6,8 @@ import { db } from "@/lib/db";
 import { exams, taxonomy } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth";
 import { getLearningPath, unitFieldName } from "@/lib/learning-path";
+import { focusTagCounts, subjectPoolMatrix } from "@/lib/tests";
+import { FOCUS_TAGS, subjectHint, subjectLabel } from "@/lib/labels";
 import { startCustomTestAction } from "../../../actions";
 import { CreateTestForm } from "./create-test-form";
 
@@ -44,6 +46,9 @@ export default async function CreateTestPage({
   const subjects = unitKind === "subject" ? [] : taxNodes.filter((n) => n.kind === "subject");
 
   const noData = poolTotals.all === 0;
+  const [matrix, tagCounts] = await Promise.all([subjectPoolMatrix(user.id, exam.id), focusTagCounts(exam.id)]);
+  const subjectsWithQuestions = subjects.filter((s) => matrix.some((m) => m.subjectId === s.id && m.counts.all > 0));
+  const focusTags = FOCUS_TAGS.map((t) => ({ ...t, count: tagCounts.get(t.tag) ?? 0 })).filter((t) => t.count > 0);
 
   const presets: Preset[] = [
     {
@@ -81,7 +86,7 @@ export default async function CreateTestPage({
       <header className="space-y-1">
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Practice</h1>
         <p className="max-w-2xl text-sm muted">
-          Pick a ready-made set, or build your own test below. Not sure what to study? Start from the{" "}
+          Pick a ready-made set, or build your own test below by choosing the subjects and topics you want to practise. Not sure what to study? Start from the{" "}
           <Link href={`/exam/${exam.slug}/learn`} className="text-accent underline">
             learning path
           </Link>
@@ -134,7 +139,9 @@ export default async function CreateTestPage({
         units={units.map((u) => ({ id: u.id, name: u.name, weight: u.weight, counts: u.pool }))}
         totals={poolTotals}
         systems={systems.map((s) => ({ id: s.id, name: s.name }))}
-        subjects={subjects.map((s) => ({ id: s.id, name: s.name }))}
+        subjects={subjectsWithQuestions.map((s) => ({ id: s.id, name: s.name, label: subjectLabel(s.name), hint: subjectHint(s.name) }))}
+        matrix={matrix}
+        focusTags={focusTags}
         initialTopicId={sp.topicId ? Number(sp.topicId) : undefined}
         initialSystemId={sp.systemId ? Number(sp.systemId) : undefined}
       />

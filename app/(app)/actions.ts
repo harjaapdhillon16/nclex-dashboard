@@ -84,6 +84,7 @@ export async function startCustomTestAction(formData: FormData) {
     timeLimitMin,
     adaptive: formData.get("adaptive") === "on" || formData.get("adaptive") === "true",
     caseStudyId: formData.get("caseStudyId") ? Number(formData.get("caseStudyId")) : undefined,
+    perSubject: formData.get("perSubject") === "on" || formData.get("perSubject") === "true",
   };
 
   const customName = String(formData.get("name") ?? "").trim() || undefined;

@@ -17,6 +17,7 @@ import { db } from "@/lib/db";
 import { exams, questions, results, testAnswers, tests } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth";
 import { finishTest, taxonomyNames } from "@/lib/tests";
+import { ASSESSMENT_DISCLAIMER, ASSESSMENT_KINDS, assessmentHistory, preparationLevel } from "@/lib/assessments";
 import type { Bucket, Estimate } from "@/lib/scoring";
 import { QUESTION_TYPE_LABELS, type QuestionType } from "@/lib/questions/types";
 import { startCustomTestAction } from "../../../actions";
@@ -80,6 +81,16 @@ export default async function TestResultsPage({
     nextTest: string;
     plan: { day: string; task: string; target: string }[];
   };
+
+  // Assessment tests get a preparation-level banner and a comparison with the previous attempt.
+  const isAssessment = (ASSESSMENT_KINDS as string[]).includes(test.kind);
+  const prepLevel = isAssessment ? preparationLevel(res.percent) : null;
+  let assessmentDelta: number | null = null;
+  if (isAssessment) {
+    const hist = await assessmentHistory(user.id, exam.id);
+    const before = hist.filter((h) => h.testId !== test.id && h.completedAt <= res.completedAt).at(-1);
+    if (before) assessmentDelta = res.percent - before.percent;
+  }
 
   const reviewItems = answers.map((a, i) => {
     const q = qmap.get(a.questionId);
@@ -178,6 +189,32 @@ export default async function TestResultsPage({
           </form>
         </div>
       </div>
+
+      {prepLevel && (
+        <section className="panel panel-pad flex flex-col gap-3 border-accent/40 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-accent">Assessment result</div>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h2
+                className={`text-2xl font-bold ${prepLevel.tone === "strong" ? "text-emerald-600 dark:text-emerald-400" : prepLevel.tone === "moderate" ? "text-amber-600 dark:text-amber-400" : "text-rose-600 dark:text-rose-400"}`}
+              >
+                {prepLevel.label}
+              </h2>
+              {assessmentDelta !== null && (
+                <span className="text-xs font-semibold muted">
+                  {assessmentDelta >= 0 ? "+" : ""}
+                  {assessmentDelta.toFixed(0)} points vs. your previous assessment
+                </span>
+              )}
+            </div>
+            <p className="max-w-2xl text-sm muted">{prepLevel.advice}</p>
+            <p className="max-w-2xl text-[11px] leading-snug faint">{ASSESSMENT_DISCLAIMER}</p>
+          </div>
+          <Link href={`/exam/${exam.slug}/assessments`} className="no-print btn btn-secondary btn-sm shrink-0">
+            All assessments
+          </Link>
+        </section>
+      )}
 
       {/* Headline Score & Practice Estimate Card */}
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-5">

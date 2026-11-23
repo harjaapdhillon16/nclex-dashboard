@@ -28,6 +28,8 @@ export type TestConfig = {
   timeLimitMin?: number | null;
   adaptive?: boolean;
   caseStudyId?: number;
+  /** Spread the questions evenly across the selected subjects instead of drawing at random. */
+  perSubject?: boolean;
 };
 
 /* ------------------------------------------------------------------ */
@@ -66,6 +68,10 @@ async function pickCaseQuestionIds(exam: Exam, cfg: TestConfig, n: number): Prom
   if (n <= 0) return [];
   const conds: SQL[] = [eq(caseStudies.examId, exam.id), eq(caseStudies.status, "published")];
   if (cfg.categoryIds?.length) conds.push(inArray(caseStudies.categoryId, cfg.categoryIds));
+  // A case study belongs to one subject / system / topic, so honour those filters too.
+  if (cfg.subjectIds?.length) conds.push(inArray(caseStudies.subjectId, cfg.subjectIds));
+  if (cfg.systemIds?.length) conds.push(inArray(caseStudies.systemId, cfg.systemIds));
+  if (cfg.topicIds?.length) conds.push(inArray(caseStudies.topicId, cfg.topicIds));
   if (cfg.caseStudyId) conds.push(eq(caseStudies.id, cfg.caseStudyId));
   const cs = await db.select({ id: caseStudies.id }).from(caseStudies).where(and(...conds)).orderBy(sql`random()`).limit(n);
   const out: number[][] = [];
@@ -136,14 +142,39 @@ export async function createTest(userId: string, exam: Exam, kind: TestKind, cfg
     }
     const caseBlocks = cfg.includeCases && cfg.count >= 10 ? await pickCaseQuestionIds(exam, cfg, Math.max(1, Math.floor(cfg.count / 25))) : [];
     const caseN = caseBlocks.reduce((a, b) => a + b.length, 0);
-    const rows = await db.select({ id: questions.id }).from(questions).where(baseConds(exam, cfg, userId)).orderBy(sql`random()`).limit(Math.max(0, cfg.count - caseN));
-    ids = interleave(rows.map((r) => r.id), caseBlocks);
+    const want = Math.max(0, cfg.count - caseN);
+    let standalone: number[] = [];
+    if (cfg.perSubject && (cfg.subjectIds?.length ?? 0) > 1) {
+      // Even split across the chosen subjects; any shortfall (a small subject) is topped up from the others.
+      const subs = cfg.subjectIds!;
+      const quota = Math.ceil(want / subs.length);
+      const picked = new Set<number>();
+      for (const sid of subs) {
+        const r = await db.select({ id: questions.id }).from(questions).where(baseConds(exam, { ...cfg, subjectIds: [sid] }, userId)).orderBy(sql`random()`).limit(quota);
+        r.forEach((x) => picked.add(x.id));
+      }
+      if (picked.size < want) {
+        const extra = await db.select({ id: questions.id }).from(questions).where(baseConds(exam, cfg, userId)).orderBy(sql`random()`).limit(want * 2);
+        for (const x of extra) if (picked.size < want) picked.add(x.id);
+      }
+      standalone = shuffle([...picked]).slice(0, want);
+    } else {
+      const rows = await db.select({ id: questions.id }).from(questions).where(baseConds(exam, cfg, userId)).orderBy(sql`random()`).limit(want);
+      standalone = rows.map((r) => r.id);
+    }
+    ids = interleave(standalone, caseBlocks);
     if (cfg.mode === "timed" && !timeLimitSec) timeLimitSec = Math.max(ids.length, 1) * 90;
   }
 
   if (!ids.length) return null;
+  let autoName: string | undefined;
+  if (!name && kind === "custom" && cfg.subjectIds?.length) {
+    const names = await taxonomyNames(exam.id);
+    const picked = cfg.subjectIds.map((id) => names.get(id)?.name).filter(Boolean) as string[];
+    if (picked.length) autoName = `Custom test: ${picked.slice(0, 3).join(", ")}${picked.length > 3 ? ` +${picked.length - 3}` : ""}`;
+  }
   const label =
-    name ??
+    name ?? autoName ??
     ({ custom: "Custom test", tutorial: "Practice set", topic: "Topic test", system: "System test", incorrect: "Incorrect questions", marked: "Marked questions", unanswered: "Unanswered questions", weak: "Weak-area test", assessment: "100-Question Assessment", mock: cfg.adaptive ? "Adaptive mock exam" : "Full-length mock exam", adaptive: "Adaptive test", diagnostic: "Diagnostic assessment", readiness: "Readiness assessment", case_study: "Case study" } as Record<TestKind, string>)[kind];
 
   const [row] = await db.insert(tests).values({ userId, examId: exam.id, name: label, kind, mode: cfg.mode, config: cfg, questionIds: ids, timeLimitSec, adaptive }).returning();
@@ -571,4 +602,43 @@ export async function examAnalytics(userId: string, examId: number) {
     recent,
     recentTests,
   };
+}
+
+
+/**
+ * Question availability for each (category/section × subject) pair, split by pool. The "Create your own
+ * test" screen sums these client-side so the live count always matches what a test will actually draw from.
+ */
+export type PoolCounts = { all: number; unused: number; incorrect: number; marked: number };
+export async function subjectPoolMatrix(userId: string, examId: number) {
+  const rows = await db.execute<{ category_id: number | null; subject_id: number | null; total: number; unused: number; incorrect: number; marked: number }>(sql`
+    SELECT s.category_id, s.subject_id,
+      count(*)::int AS total,
+      count(*) FILTER (WHERE s.never_answered)::int AS unused,
+      count(*) FILTER (WHERE s.last_correct = false)::int AS incorrect,
+      count(*) FILTER (WHERE s.is_marked)::int AS marked
+    FROM (
+      SELECT q.category_id, q.subject_id,
+        NOT EXISTS (SELECT 1 FROM test_answers ta WHERE ta.user_id = ${userId} AND ta.question_id = q.id AND ta.response IS NOT NULL) AS never_answered,
+        (SELECT l.is_correct FROM test_answers l WHERE l.user_id = ${userId} AND l.question_id = q.id AND l.is_correct IS NOT NULL ORDER BY l.answered_at DESC NULLS LAST LIMIT 1) AS last_correct,
+        (EXISTS (SELECT 1 FROM bookmarks b WHERE b.user_id = ${userId} AND b.question_id = q.id)
+          OR EXISTS (SELECT 1 FROM test_answers mk WHERE mk.user_id = ${userId} AND mk.question_id = q.id AND mk.marked = true)) AS is_marked
+      FROM questions q
+      WHERE q.exam_id = ${examId} AND q.status = 'published' AND q.case_study_id IS NULL
+    ) s
+    GROUP BY s.category_id, s.subject_id`);
+  return rows.rows.map((r) => ({
+    categoryId: r.category_id == null ? null : Number(r.category_id),
+    subjectId: r.subject_id == null ? null : Number(r.subject_id),
+    counts: { all: Number(r.total), unused: Number(r.unused), incorrect: Number(r.incorrect), marked: Number(r.marked) } as PoolCounts,
+  }));
+}
+
+/** Tags a student can filter a custom test by, with how many published questions carry each. */
+export async function focusTagCounts(examId: number) {
+  const rows = await db.execute<{ tag: string; n: number }>(sql`
+    SELECT t AS tag, count(*)::int AS n FROM questions q, unnest(q.tags) t
+    WHERE q.exam_id = ${examId} AND q.status = 'published' AND q.case_study_id IS NULL
+    GROUP BY t`);
+  return new Map(rows.rows.map((r) => [r.tag, Number(r.n)]));
 }

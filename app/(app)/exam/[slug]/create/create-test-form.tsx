@@ -6,6 +6,8 @@ import { DIFFICULTIES, DIFFICULTY_LABELS, QUESTION_TYPE_LABELS, type QuestionTyp
 import { startCustomTestAction } from "../../../actions";
 
 type Counts = { all: number; unused: number; incorrect: number; marked: number };
+type MatrixRow = { categoryId: number | null; subjectId: number | null; counts: Counts };
+type SubjectOpt = { id: number; name: string; label: string; hint: string };
 type PoolKey = keyof Counts;
 type Mode = "tutor" | "timed" | "exam";
 
@@ -33,6 +35,8 @@ export function CreateTestForm({
   totals,
   systems,
   subjects,
+  matrix,
+  focusTags,
   initialTopicId,
   initialSystemId,
 }: {
@@ -45,7 +49,9 @@ export function CreateTestForm({
   units: { id: number; name: string; weight?: number | null; counts: Counts }[];
   totals: Counts;
   systems: { id: number; name: string }[];
-  subjects: { id: number; name: string }[];
+  subjects: SubjectOpt[];
+  matrix: MatrixRow[];
+  focusTags: { tag: string; label: string; count: number }[];
   initialTopicId?: number;
   initialSystemId?: number;
 }) {
@@ -56,11 +62,25 @@ export function CreateTestForm({
   const [adaptive, setAdaptive] = useState(false);
   const [timeLimit, setTimeLimit] = useState("");
   const [filtersUsed, setFiltersUsed] = useState(false);
+  const [subjSel, setSubjSel] = useState<Set<number>>(new Set());
+  const [balanced, setBalanced] = useState(true);
 
+  const hasSubjects = subjects.length > 0;
   const allSelected = selected.size === 0; // nothing ticked means "every unit"
+  const allSubjects = subjSel.size === 0; // nothing ticked means "every subject"
+
+  /** Sum the availability matrix for a unit/subject selection (null selection = everything). */
+  const sumMatrix = (unitSel: Set<number> | null, subSel: Set<number> | null): Counts =>
+    matrix
+      .filter((m) => (!unitSel || (m.categoryId != null && unitSel.has(m.categoryId))) && (!subSel || (m.subjectId != null && subSel.has(m.subjectId))))
+      .reduce<Counts>(
+        (a, m) => ({ all: a.all + m.counts.all, unused: a.unused + m.counts.unused, incorrect: a.incorrect + m.counts.incorrect, marked: a.marked + m.counts.marked }),
+        { all: 0, unused: 0, incorrect: 0, marked: 0 },
+      );
 
   // Live counts: for each pool, how many questions the current unit selection offers.
   const poolCounts: Counts = useMemo(() => {
+    if (hasSubjects) return sumMatrix(allSelected ? null : selected, allSubjects ? null : subjSel);
     if (allSelected) return totals;
     return units
       .filter((u) => selected.has(u.id))
@@ -73,13 +93,23 @@ export function CreateTestForm({
         }),
         { all: 0, unused: 0, incorrect: 0, marked: 0 },
       );
-  }, [allSelected, selected, totals, units]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allSelected, selected, totals, units, hasSubjects, allSubjects, subjSel, matrix]);
 
   const available = poolCounts[pool];
   const maxCount = Math.max(1, Math.min(250, available));
   const count = Math.max(1, Math.min(wanted, maxCount));
   const suggestedMinutes = Math.ceil(count * 1.5);
   const canStart = available > 0;
+
+  function toggleSubject(id: number) {
+    setSubjSel((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   function toggle(id: number) {
     setSelected((prev) => {
@@ -111,6 +141,7 @@ export function CreateTestForm({
       <input type="hidden" name="count" value={adaptive ? 85 : count} />
       <input type="hidden" name="randomizeOptions" value="true" />
       {adaptive && <input type="hidden" name="adaptive" value="true" />}
+      {hasSubjects && subjSel.size > 1 && balanced && <input type="hidden" name="perSubject" value="true" />}
       {initialTopicId && <input type="hidden" name="topicIds" value={initialTopicId} />}
       {initialSystemId && <input type="hidden" name="systemIds" value={initialSystemId} />}
       {mode === "timed" && !adaptive && timeLimit && <input type="hidden" name="timeLimitMin" value={timeLimit} />}
@@ -169,11 +200,63 @@ export function CreateTestForm({
         </div>
       </fieldset>
 
-      {/* 3. Units */}
+      {/* 3. Subjects */}
+      {hasSubjects && (
+        <fieldset className="panel panel-pad space-y-3">
+          <legend className="sr-only">Subjects</legend>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <StepLabel n={3} title="Subjects" />
+            <div className="flex items-center gap-3 text-xs">
+              <span className="muted">{allSubjects ? "All subjects" : `${subjSel.size} of ${subjects.length} selected`}</span>
+              <button type="button" className="font-semibold text-accent hover:underline" onClick={() => setSubjSel(new Set(subjects.map((x) => x.id)))}>
+                Select all
+              </button>
+              <button type="button" className="font-semibold text-accent hover:underline" onClick={() => setSubjSel(new Set())}>
+                Clear
+              </button>
+            </div>
+          </div>
+          <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {subjects.map((sub) => {
+              const on = subjSel.has(sub.id);
+              const n = sumMatrix(allSelected ? null : selected, new Set([sub.id]))[pool];
+              return (
+                <li key={sub.id}>
+                  <label
+                    className={`flex h-full cursor-pointer items-start justify-between gap-3 rounded-xl border p-3 transition ${
+                      on ? "border-accent bg-accent-subtle" : "border-border hover:bg-muted/50"
+                    } ${n === 0 ? "opacity-55" : ""}`}
+                  >
+                    <span className="flex min-w-0 items-start gap-2.5">
+                      <input type="checkbox" name="subjectIds" value={sub.id} checked={on} onChange={() => toggleSubject(sub.id)} className="mt-0.5 rounded" />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold leading-tight">{sub.label}</span>
+                        {sub.hint && <span className="mt-0.5 block text-[11px] leading-snug muted">{sub.hint}</span>}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-sm font-bold tabular-nums text-accent">{n}</span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+          {subjSel.size > 1 && (
+            <label className="flex items-start gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs">
+              <input type="checkbox" checked={balanced} onChange={(e) => setBalanced(e.target.checked)} className="mt-0.5 rounded" />
+              <span>
+                <strong>Balance across subjects.</strong> Take an equal share of questions from each subject you picked, instead of drawing at random.
+              </span>
+            </label>
+          )}
+          <p className="text-[11px] muted">Tick nothing to include every subject. Numbers show questions available in the chosen pool.</p>
+        </fieldset>
+      )}
+
+      {/* 4. Units */}
       <fieldset className="panel panel-pad space-y-3">
         <legend className="sr-only">{unitLabel}</legend>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <StepLabel n={3} title={unitLabel} />
+          <StepLabel n={hasSubjects ? 4 : 3} title={hasSubjects ? `${unitLabel} (optional)` : unitLabel} />
           <div className="flex items-center gap-3 text-xs">
             <span className="muted">{allSelected ? "All included" : `${selected.size} of ${units.length} selected`}</span>
             <button type="button" className="font-semibold text-accent hover:underline" onClick={() => setSelected(new Set(units.map((u) => u.id)))}>
@@ -190,7 +273,7 @@ export function CreateTestForm({
           <ul className="grid grid-cols-1 gap-1.5 md:grid-cols-2">
             {units.map((u) => {
               const on = selected.has(u.id);
-              const n = u.counts[pool];
+              const n = hasSubjects ? sumMatrix(new Set([u.id]), allSubjects ? null : subjSel)[pool] : u.counts[pool];
               return (
                 <li key={u.id}>
                   <label
@@ -221,7 +304,7 @@ export function CreateTestForm({
 
       {/* 4. How many */}
       <div className="panel panel-pad space-y-3">
-        <StepLabel n={4} title="How many questions" />
+        <StepLabel n={hasSubjects ? 5 : 4} title="How many questions" />
         <div className="flex flex-wrap items-center gap-3">
           <input
             type="number"
@@ -290,7 +373,7 @@ export function CreateTestForm({
             name="types"
             options={questionTypes.map((qt) => ({ value: qt, label: QUESTION_TYPE_LABELS[qt as QuestionType] ?? qt }))}
           />
-          {subjects.length > 0 && <CheckGroup title="Subject" name="subjectIds" options={subjects.map((s) => ({ value: String(s.id), label: s.name }))} />}
+          <CheckGroup title="Question focus (any of)" name="tags" options={focusTags.map((t) => ({ value: t.tag, label: `${t.label} (${t.count})` }))} />
           {systems.length > 0 && <CheckGroup title="Body system" name="systemIds" options={systems.map((s) => ({ value: String(s.id), label: s.name }))} />}
           <div className="flex flex-wrap gap-x-6 gap-y-2">
             {supportsCases && (
@@ -316,7 +399,9 @@ export function CreateTestForm({
           {canStart
             ? adaptive
               ? "Start adaptive test"
-              : `Start ${mode} test · ${count} question${count === 1 ? "" : "s"}`
+              : `Start ${mode} test · ${count} question${count === 1 ? "" : "s"}${
+                  hasSubjects && !allSubjects ? ` · ${subjects.filter((x) => subjSel.has(x.id)).map((x) => x.label).slice(0, 2).join(", ")}${subjSel.size > 2 ? ` +${subjSel.size - 2}` : ""}` : ""
+                }`
             : "No questions match this selection"}
         </button>
       </div>

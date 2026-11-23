@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { flashcards, questions, studyMaterials, taxonomy, tests } from "@/lib/db/schema";
 
@@ -211,7 +211,7 @@ export async function getLearningPath(
   const mats = await db
     .select()
     .from(studyMaterials)
-    .where(and(eq(studyMaterials.examId, exam.id), eq(studyMaterials.status, "published")))
+    .where(and(eq(studyMaterials.examId, exam.id), eq(studyMaterials.status, "published"), ne(studyMaterials.kind, "cheatsheet")))
     .orderBy(asc(studyMaterials.id));
   const lessonsByUnit = new Map<number, Lesson[]>();
   const looseLessons: Lesson[] = [];
