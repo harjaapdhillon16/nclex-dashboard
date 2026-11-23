@@ -138,6 +138,14 @@ export default async function LandingPage() {
           Independent practice platform. Not affiliated with or endorsed by NCSBN, NCLEX, Pearson VUE, NBME, USMLE, IELTS partners,
           OET, ETS, AAMC, ADA, NABP, NCCPA, College Board, ACT, GMAC, or AICPA.
         </p>
+        <nav aria-label="Legal" className="mx-auto mt-3 flex max-w-5xl gap-4 font-semibold">
+          <Link href="/privacy" className="hover:text-foreground hover:underline">
+            Privacy Policy
+          </Link>
+          <Link href="/terms" className="hover:text-foreground hover:underline">
+            Terms &amp; Conditions
+          </Link>
+        </nav>
       </footer>
     </div>
   );

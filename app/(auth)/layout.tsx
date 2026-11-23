@@ -28,6 +28,14 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <p>
             Independent educational preparation platform. Not affiliated with or endorsed by NCSBN, Pearson VUE, NBME, IELTS partners, OET, ETS, AAMC, College Board, or AICPA.
           </p>
+          <p className="flex gap-4 pt-1 font-semibold text-white/90">
+            <Link href="/privacy" className="hover:underline">
+              Privacy Policy
+            </Link>
+            <Link href="/terms" className="hover:underline">
+              Terms &amp; Conditions
+            </Link>
+          </p>
         </div>
       </div>
 
