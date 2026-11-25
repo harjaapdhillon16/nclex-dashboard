@@ -4,6 +4,9 @@ import { EXAM_CATEGORIES, EXAMS } from "@/lib/seed/catalog";
 import { getCurrentUser } from "@/lib/auth";
 import { demoLoginAction } from "@/app/(auth)/actions";
 
+/** Categories not advertised on the landing page. */
+const HIDDEN_CATEGORIES: ReadonlySet<string> = new Set(["medical", "college", "graduate", "professional"]);
+
 const STEPS = [
   {
     icon: BookOpen,
@@ -115,7 +118,7 @@ export default async function LandingPage() {
         <h2 className="mb-1 text-center text-2xl font-bold tracking-tight">Courses</h2>
         <p className="mb-6 text-center text-sm muted">Pick your exam when you sign in.</p>
         <div className="space-y-3">
-          {EXAM_CATEGORIES.map((cat) => {
+          {EXAM_CATEGORIES.filter((cat) => !HIDDEN_CATEGORIES.has(cat.slug)).map((cat) => {
             const courses = EXAMS.filter((e) => e.category === cat.slug);
             return (
               <div key={cat.slug} className="flex flex-col gap-2 border-b border-border pb-3 sm:flex-row sm:items-baseline sm:gap-6">
