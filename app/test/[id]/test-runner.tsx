@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -18,12 +18,12 @@ import {
   EyeOff,
   Flag,
   FlaskConical,
-  Grid,
   HelpCircle,
   Lightbulb,
   LogOut,
   Mic,
   NotebookPen,
+  Pause,
   Play,
   RotateCcw,
   ShieldAlert,
@@ -400,392 +400,314 @@ export function TestRunnerClient({
   const caseTabs = activeCase ? [...new Set(activeCase.sections.map((s) => s.tab))] : [];
   const currentTabName = caseTabs.includes(caseTab as never) ? caseTab : caseTabs[0] ?? "";
 
+  const hasContext = Boolean(activeCase || q.exhibit != null || q.patient != null || q.scenario);
+  const adaptivePending = initialTest.adaptive && !isCompleted && !current.submitted;
+  const tutorPending = !isCompleted && !initialTest.adaptive && initialTest.mode === "tutor" && !current.submitted;
+  const isLast = idx >= items.length - 1;
+  const showFinish = !isCompleted && !adaptivePending && !tutorPending && isLast;
+
+  const barBtn =
+    "inline-flex items-center gap-1.5 rounded px-2 py-1 text-[13px] font-medium text-[#0b2447] hover:bg-white/40 disabled:opacity-40";
+  const footBtn =
+    "inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold text-white hover:bg-white/15 disabled:opacity-40 disabled:hover:bg-transparent";
+  const footPrimary =
+    "inline-flex items-center gap-1.5 rounded-md bg-white px-4 py-2 text-sm font-bold text-[#006aa6] hover:bg-white/90 disabled:opacity-50";
+
+  // Left pane: the "chart" the question refers to (case study tabs, patient, scenario, exhibit).
+  const contextNode = hasContext ? (
+    <div className="space-y-3">
+      <div className="text-[15px] leading-snug">
+        <div className="font-bold">
+          Item {idx + 1} of {items.length}
+        </div>
+        {activeCase && (
+          <p>
+            <span className="font-semibold">{activeCase.title}.</span> {activeCase.summary}
+          </p>
+        )}
+      </div>
+
+      {activeCase && (
+        <div>
+          <div className="flex flex-wrap gap-1.5" role="tablist">
+            {caseTabs.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={currentTabName === tab}
+                onClick={() => setCaseTab(tab)}
+                className={`rounded-t-lg border border-b-0 px-4 py-2 text-sm font-bold transition ${
+                  currentTabName === tab
+                    ? "border-border bg-surface text-foreground"
+                    : "border-transparent bg-muted text-foreground/70 hover:text-foreground"
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+          <div className="space-y-3 rounded-b-lg rounded-tr-lg border border-border bg-surface p-4 text-[15px] leading-relaxed">
+            {activeCase.sections
+              .filter((s) => s.tab === currentTabName)
+              .map((sec, i) => (
+                <div key={i} className="space-y-2 border-b border-border pb-3 last:border-b-0 last:pb-0">
+                  <div className="flex items-center justify-between gap-2">
+                    {sec.title && <div className="font-bold">{sec.title}</div>}
+                    {sec.time && <span className="chip font-mono text-[11px]">{sec.time}</span>}
+                  </div>
+                  {sec.text && <p className="whitespace-pre-line">{sec.text}</p>}
+                  {sec.table && (
+                    <div className="table-wrapper" tabIndex={0} role="region" aria-label={sec.title || sec.tab}>
+                      <table className="table text-sm">
+                        <thead>
+                          <tr>
+                            {sec.table.columns.map((col, ci) => (
+                              <th key={ci}>{col}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sec.table.rows.map((r, ri) => (
+                            <tr key={ri}>
+                              {r.map((cell, ci) => (
+                                <td key={ci}>{cell}</td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
+      {!activeCase && q.patient != null && <PatientCard patient={q.patient as PatientInfo} />}
+
+      {q.scenario && (
+        <div className="rounded-lg border border-border bg-surface p-4 text-[15px] leading-relaxed whitespace-pre-line">
+          {q.scenario}
+        </div>
+      )}
+
+      {q.exhibit != null && <ExhibitCard exhibit={q.exhibit as Exhibit} />}
+    </div>
+  ) : null;
+
+  // The question itself: stem + answer controls, flat like a real exam screen.
+  const questionNode = (
+    <div className="space-y-5">
+      {!hasContext && (
+        <div className="text-[15px] font-bold">
+          Item {idx + 1} of {items.length}
+        </div>
+      )}
+      <div className="flex gap-3">
+        <Play className="mt-2 h-4 w-4 shrink-0 fill-[#1a73c8] text-[#1a73c8]" aria-hidden />
+        <h1 className="text-[17px] leading-7 sm:leading-8 whitespace-pre-line">{q.stem}</h1>
+      </div>
+      <div className="md:pl-7">
+        <QuestionTypeRenderer
+          question={q}
+          response={current.response}
+          locked={isLocked}
+          reveal={current.reveal}
+          onChange={updateLocalResponse}
+          speakTimer={speakTimer}
+          setSpeakTimer={setSpeakTimer}
+          isRecordingSim={isRecordingSim}
+          setIsRecordingSim={setIsRecordingSim}
+        />
+      </div>
+    </div>
+  );
+
+  const rationaleNode = current.reveal ? (
+    <RationalePanel
+      question={q}
+      response={current.response}
+      reveal={current.reveal}
+      examSlug={exam.slug}
+      onOpenNote={() => noteDialogRef.current?.showModal()}
+    />
+  ) : null;
+
+  // Pane assignment. With a chart: chart | question (+ rationale).
+  // Without one: question | rationale once revealed, otherwise a single centred column.
+  let leftPane: ReactNode = null;
+  let rightPane: ReactNode = null;
+  if (hasContext) {
+    leftPane = contextNode;
+    rightPane = (
+      <div className="space-y-6">
+        {questionNode}
+        {rationaleNode}
+      </div>
+    );
+  } else if (rationaleNode) {
+    leftPane = questionNode;
+    rightPane = rationaleNode;
+  } else {
+    rightPane = <div className="mx-auto w-full max-w-3xl">{questionNode}</div>;
+  }
+  const twoPane = leftPane !== null;
+
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground">
-      {/* Top Simulator Bar */}
-      <header className="sticky top-0 z-30 border-b border-[#144a85] bg-[#1b5ea8] text-white px-4 py-2.5 shadow">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <Link
-              href={isCompleted ? `/test/${initialTest.id}/results` : `/exam/${exam.slug}`}
-              onClick={() => {
-                if (!isCompleted) void syncAnswer({});
-              }}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-white/20"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              {isCompleted ? "Results" : "Save & Exit"}
-            </Link>
-
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 text-xs font-bold text-white truncate">
-                <span className="uppercase tracking-wide">{exam.shortName} Test</span>
-                <span className="opacity-60">·</span>
-                <span className="truncate font-medium opacity-90">{initialTest.name}</span>
-                <span className="rounded bg-white/20 px-1.5 py-0.5 text-[10px] uppercase">{initialTest.mode}</span>
-                {initialTest.adaptive && (
-                  <span className="rounded bg-amber-400/25 text-amber-100 px-1.5 py-0.5 text-[10px]">
-                    CAT Adaptive
-                  </span>
-                )}
-              </div>
-              <div className="text-[13px] font-semibold text-white truncate">
-                Item {idx + 1} of {items.length}
-                <span className="ml-2 text-[11px] font-normal text-white/70">
-                  {q.code} · {q.category ?? exam.name}
-                  {q.topic ? ` › ${q.topic}` : ""}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Timers & Simulator Utilities */}
-          <div className="flex flex-wrap items-center gap-2">
-            {!hideTimer ? (
-              <div className="flex items-center gap-2 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-mono text-white">
-                <Clock className="h-3.5 w-3.5 text-amber-300" />
-                {remainingSec !== null ? (
-                  <span title="Remaining test time">Rem: {formatSec(remainingSec)}</span>
-                ) : (
-                  <span title="Total elapsed time">Total: {formatSec(elapsedSec)}</span>
-                )}
-                <span className="opacity-50">|</span>
-                <span title="Time on this question">Item: {formatSec(qTimerSec)}</span>
-              </div>
-            ) : null}
-
-            <button
-              type="button"
-              onClick={() => setHideTimer((v) => !v)}
-              className="rounded-lg bg-white/10 px-2 py-1.5 text-xs hover:bg-white/20"
-              title={hideTimer ? "Show timer" : "Hide timer"}
-              aria-label={hideTimer ? "Show timer" : "Hide timer"}
-            >
-              {hideTimer ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-            </button>
-
-            {exam.features?.calculator !== false && (
-              <button
-                type="button"
-                onClick={() => calcDialogRef.current?.showModal()}
-                className="inline-flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-white/20"
-              >
-                <Calculator className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Calculator</span>
-              </button>
-            )}
-
-            {exam.features?.labReference !== false && (
-              <button
-                type="button"
-                onClick={() => labDialogRef.current?.showModal()}
-                className="inline-flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-white/20"
-              >
-                <FlaskConical className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Lab Values</span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => noteDialogRef.current?.showModal()}
-              className="inline-flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-white/20"
-            >
-              <NotebookPen className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Note</span>
-            </button>
-
-            {!initialTest.adaptive && (
-              <button
-                type="button"
-                onClick={() => navDialogRef.current?.showModal()}
-                className="inline-flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-white/20"
-              >
-                <Grid className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Navigator</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Progress Bar */}
-        <div className="max-w-7xl mx-auto mt-2">
-          <div className="h-1 w-full overflow-hidden rounded-full bg-white/15">
-            <div className="h-full bg-amber-400 transition-all" style={{ width: `${progressPct}%` }} />
-          </div>
-        </div>
-      </header>
-
-      {/* Sub-header metadata & flags */}
-      <div className="border-b border-border bg-surface px-4 py-2">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="chip bg-accent-subtle text-accent border-accent/25 font-semibold">
-              {QUESTION_TYPE_LABELS[q.type]}
+    <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
+      {/* Top bar: exam title · test name · clock + item counter */}
+      <header className="no-print shrink-0 bg-[#006aa6] text-white">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-2 text-[15px] font-medium">
+          <div className="min-w-0 truncate">
+            {exam.shortName} Test
+            <span className="ml-2 rounded bg-white/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase align-middle">
+              {initialTest.mode}
             </span>
-            <span className="chip">
-              Difficulty: {DIFFICULTY_LABELS[q.difficulty as Difficulty] ?? q.difficulty}
-            </span>
-            {q.ncjmmStep && (
-              <span className="chip border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">
-                NGN Step {q.caseStep}/6: {NCJMM_LABELS[q.ncjmmStep as NcjmmStep] ?? q.ncjmmStep}
+            {initialTest.adaptive && (
+              <span className="ml-1 rounded bg-amber-400/30 px-1.5 py-0.5 text-[10px] font-semibold align-middle">
+                CAT
               </span>
             )}
           </div>
-
-          <div className="flex items-center gap-2">
+          <div className="hidden max-w-[40vw] truncate text-center sm:block">{initialTest.name}</div>
+          <div className="col-start-3 flex items-center justify-end gap-3 tabular-nums">
+            {!hideTimer && (
+              <span className="inline-flex items-center gap-1.5" title={remainingSec !== null ? "Time remaining" : "Time elapsed"}>
+                <Clock className="h-4 w-4" />
+                {formatSec(remainingSec !== null ? remainingSec : elapsedSec)}
+              </span>
+            )}
             <button
               type="button"
-              onClick={() => void syncAnswer({ overrideMarked: !current.marked })}
-              className={`btn btn-sm ${
-                current.marked ? "bg-amber-500 text-white" : "btn-secondary"
-              }`}
+              onClick={() => setHideTimer((v) => !v)}
+              className="rounded p-1 hover:bg-white/15"
+              title={hideTimer ? "Show timer" : "Hide timer"}
+              aria-label={hideTimer ? "Show timer" : "Hide timer"}
             >
-              <Flag className="h-3.5 w-3.5" />
-              {current.marked ? "Marked for Review" : "Mark for Review"}
+              {hideTimer ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
             </button>
-
-            <button
-              type="button"
-              onClick={() => void toggleBookmark()}
-              className={`btn btn-sm ${
-                current.bookmarked ? "bg-accent text-white" : "btn-secondary"
-              }`}
-            >
-              <Bookmark className="h-3.5 w-3.5" />
-              {current.bookmarked ? "Saved" : "Bookmark"}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => reportDialogRef.current?.showModal()}
-              className="btn btn-secondary btn-sm"
-              title="Report an issue with this question"
-            >
-              <AlertCircle className="h-3.5 w-3.5" />
-              Report
-            </button>
+            <span className="whitespace-nowrap">Question {idx + 1}</span>
           </div>
+        </div>
+        <div className="h-0.5 w-full bg-white/15">
+          <div className="h-full bg-amber-400 transition-all" style={{ width: `${progressPct}%` }} />
+        </div>
+      </header>
+
+      {/* Tool bar: calculator / labs / notes on the left, review actions on the right */}
+      <div className="no-print flex shrink-0 flex-wrap items-center justify-between gap-x-3 bg-[#8db4e8] px-3 py-1">
+        <div className="flex flex-wrap items-center">
+          {exam.features?.calculator !== false && (
+            <button type="button" onClick={() => calcDialogRef.current?.showModal()} className={barBtn}>
+              <Calculator className="h-4 w-4" />
+              Calculator
+            </button>
+          )}
+          {exam.features?.labReference !== false && (
+            <button type="button" onClick={() => labDialogRef.current?.showModal()} className={barBtn}>
+              <FlaskConical className="h-4 w-4" />
+              Lab Values
+            </button>
+          )}
+          <button type="button" onClick={() => noteDialogRef.current?.showModal()} className={barBtn}>
+            <NotebookPen className="h-4 w-4" />
+            Note
+          </button>
+          {!isLocked && current.response !== null && (
+            <button type="button" onClick={() => updateLocalResponse(null)} className={barBtn}>
+              <RotateCcw className="h-4 w-4" />
+              Clear
+            </button>
+          )}
+        </div>
+
+        <div className="hidden items-center gap-2 text-[12px] text-[#0b2447] xl:flex">
+          <span className="rounded bg-white/50 px-2 py-0.5 font-semibold">{QUESTION_TYPE_LABELS[q.type]}</span>
+          <span className="rounded bg-white/50 px-2 py-0.5">
+            {DIFFICULTY_LABELS[q.difficulty as Difficulty] ?? q.difficulty}
+          </span>
+          {q.ncjmmStep && (
+            <span className="rounded bg-white/50 px-2 py-0.5">
+              Step {q.caseStep}/6: {NCJMM_LABELS[q.ncjmmStep as NcjmmStep] ?? q.ncjmmStep}
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center">
+          <button
+            type="button"
+            onClick={() => void toggleBookmark()}
+            aria-pressed={current.bookmarked}
+            className={`${barBtn} ${current.bookmarked ? "!bg-white/60 font-semibold" : ""}`}
+          >
+            <Bookmark className={`h-4 w-4 ${current.bookmarked ? "fill-current" : ""}`} />
+            {current.bookmarked ? "Saved" : "Save"}
+          </button>
+          <button type="button" onClick={() => reportDialogRef.current?.showModal()} className={barBtn} title="Report an issue with this question">
+            <AlertCircle className="h-4 w-4" />
+            Report
+          </button>
+          <button
+            type="button"
+            onClick={() => void syncAnswer({ overrideMarked: !current.marked })}
+            aria-pressed={current.marked}
+            className={`${barBtn} ${current.marked ? "!bg-white/60 font-semibold" : ""}`}
+          >
+            <Flag className={`h-4 w-4 ${current.marked ? "fill-current" : ""}`} />
+            {current.marked ? "Marked for Review" : "Mark for Review"}
+          </button>
         </div>
       </div>
 
-      {/* Main Split Workspace (Left: Progressive Case Study or Clinical Exhibit; Right: Stem, Answer Controls & 18-point Rationale) */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: NGN Progressive Case Study or Exhibit if present */}
-        {(activeCase || q.exhibit != null || q.patient != null || q.scenario) && (
-          <section className="lg:col-span-5 space-y-4">
-            {activeCase && (
-              <div className="panel overflow-hidden">
-                <div className="bg-sidebar text-white p-4 space-y-1.5">
-                  <div className="flex items-center justify-between text-[11px] uppercase tracking-wider text-sidebar-muted">
-                    <span>NGN Clinical Case Study · Progressive Chart</span>
-                    <span>Step {q.caseStep ?? 1} of 6</span>
-                  </div>
-                  <h2 className="text-base font-bold">{activeCase.title}</h2>
-                  <p className="text-xs text-white/85">{activeCase.summary}</p>
-                </div>
-
-                {/* EHR Tabs */}
-                <div className="flex flex-wrap border-b border-border bg-muted/50 px-2 pt-2 gap-1">
-                  {caseTabs.map((tab) => (
-                    <button
-                      key={tab}
-                      type="button"
-                      onClick={() => setCaseTab(tab)}
-                      className={`rounded-t-xl px-3 py-2 text-xs font-semibold transition ${
-                        currentTabName === tab
-                          ? "bg-surface text-accent border-t border-x border-border"
-                          : "muted hover:text-foreground"
-                      }`}
-                    >
-                      {tab}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="p-4 space-y-4 max-h-[540px] overflow-y-auto text-xs leading-relaxed">
-                  {activeCase.sections
-                    .filter((s) => s.tab === currentTabName)
-                    .map((sec, i) => (
-                      <div key={i} className="space-y-2 border-b border-border last:border-b-0 pb-3 last:pb-0">
-                        <div className="flex items-center justify-between">
-                          {sec.title && <div className="font-bold text-sm">{sec.title}</div>}
-                          {sec.time && <span className="chip text-[11px] font-mono">{sec.time}</span>}
-                        </div>
-                        {sec.text && <p className="whitespace-pre-line">{sec.text}</p>}
-                        {sec.table && (
-                          <div className="table-wrapper" tabIndex={0} role="region" aria-label={sec.title || sec.tab}>
-                            <table className="table text-xs">
-                              <thead>
-                                <tr>
-                                  {sec.table.columns.map((col, ci) => (
-                                    <th key={ci}>{col}</th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {sec.table.rows.map((r, ri) => (
-                                  <tr key={ri}>
-                                    {r.map((cell, ci) => (
-                                      <td key={ci}>{cell}</td>
-                                    ))}
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
-
-            {/* Standalone Patient Profile */}
-            {!activeCase && q.patient != null && (
-              <PatientCard patient={q.patient as PatientInfo} />
-            )}
-
-            {/* Standalone Scenario */}
-            {q.scenario && (
-              <div className="panel panel-pad space-y-2">
-                <div className="text-xs font-semibold uppercase tracking-wider muted">Clinical / Exam Scenario</div>
-                <p className="text-sm leading-relaxed whitespace-pre-line">{q.scenario}</p>
-              </div>
-            )}
-
-            {/* Standalone Exhibit (Passage, Trend Table, ECG, Audio) */}
-            {q.exhibit != null && <ExhibitCard exhibit={q.exhibit as Exhibit} />}
-          </section>
+      {/* Workspace: two independently scrolling panes, so the page itself never scrolls */}
+      <main
+        className={`min-h-0 flex-1 overflow-y-auto lg:overflow-hidden ${
+          twoPane ? "grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-[minmax(0,1fr)]" : ""
+        }`}
+      >
+        {twoPane ? (
+          <>
+            <section className="px-5 py-4 sm:px-8 sm:py-5 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:border-r lg:border-border">
+              {leftPane}
+            </section>
+            <section className="px-5 py-4 sm:px-8 sm:py-5 lg:h-full lg:min-h-0 lg:overflow-y-auto">{rightPane}</section>
+          </>
+        ) : (
+          <section className="px-5 py-4 sm:px-8 sm:py-5 lg:h-full lg:overflow-y-auto">{rightPane}</section>
         )}
-
-        {/* Right Column: Question Stem, Interactive Renderer, Action Buttons, and 18-Section Rationale */}
-        <section
-          className={
-            activeCase || q.exhibit != null || q.patient != null || q.scenario
-              ? "lg:col-span-7 space-y-5"
-              : "lg:col-span-12 max-w-4xl mx-auto w-full space-y-5"
-          }
-        >
-          <div className="panel panel-pad space-y-5">
-            <div className="space-y-2">
-              <div className="text-xs font-semibold uppercase tracking-wider text-accent">
-                Question {idx + 1} of {items.length}
-              </div>
-              <h1 className="text-base sm:text-lg font-semibold leading-relaxed whitespace-pre-line">{q.stem}</h1>
-            </div>
-
-            {/* Type-specific Question Renderer */}
-            <QuestionTypeRenderer
-              question={q}
-              response={current.response}
-              locked={isLocked}
-              reveal={current.reveal}
-              onChange={updateLocalResponse}
-              speakTimer={speakTimer}
-              setSpeakTimer={setSpeakTimer}
-              isRecordingSim={isRecordingSim}
-              setIsRecordingSim={setIsRecordingSim}
-            />
-
-            {/* Question Action Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-border">
-              <div className="flex items-center gap-2">
-                {!isLocked && current.response !== null && (
-                  <button
-                    type="button"
-                    onClick={() => updateLocalResponse(null)}
-                    className="btn btn-secondary btn-sm"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                    Clear Answer
-                  </button>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
-                {!isCompleted && initialTest.mode === "tutor" && !current.submitted && (
-                  <button
-                    type="button"
-                    disabled={busy || current.response === null}
-                    onClick={() => void syncAnswer({ submit: true })}
-                    className="btn btn-primary btn-sm"
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    Submit Answer &amp; View Rationale
-                  </button>
-                )}
-
-                {initialTest.adaptive && !isCompleted && !current.submitted ? (
-                  <button
-                    type="button"
-                    disabled={busy || current.response === null}
-                    onClick={() => void syncAnswer({ submit: true })}
-                    className="btn btn-primary btn-sm"
-                  >
-                    Submit &amp; Next Adaptive Item
-                    <ArrowRight className="h-4 w-4" />
-                  </button>
-                ) : idx < items.length - 1 ? null : !isCompleted ? (
-                  <button
-                    type="button"
-                    onClick={() => confirmDialogRef.current?.showModal()}
-                    className="btn btn-primary btn-sm"
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    Finish &amp; Submit Test
-                  </button>
-                ) : (
-                  <Link href={`/test/${initialTest.id}/results`} className="btn btn-primary btn-sm">
-                    Back to Full Results Report
-                  </Link>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* 18-Section Comprehensive Post-Submission Rationale Panel */}
-          {current.reveal && (
-            <RationalePanel
-              question={q}
-              response={current.response}
-              reveal={current.reveal}
-              examSlug={exam.slug}
-              onOpenNote={() => noteDialogRef.current?.showModal()}
-            />
-          )}
-        </section>
       </main>
 
-      {/* Bottom Sticky Navigation Bar */}
-      <footer className="no-print sticky bottom-0 z-30 border-t border-[#144a85] bg-[#1b5ea8] px-3 py-2 text-white shadow-[0_-2px_8px_rgba(0,0,0,.15)]">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs">
-          <div className="flex items-center gap-3">
+      {/* Bottom bar: pause / end · confidence flags · previous / navigate / submit / next */}
+      <footer className="no-print shrink-0 bg-[#006aa6] px-2 text-white">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center">
             {!isCompleted ? (
-              <button
-                type="button"
-                onClick={() => confirmDialogRef.current?.showModal()}
-                className="inline-flex items-center gap-1.5 rounded-md bg-white/15 px-3 py-1.5 font-semibold hover:bg-white/25"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                End
-              </button>
+              <>
+                <Link
+                  href={`/exam/${exam.slug}`}
+                  onClick={() => void syncAnswer({})}
+                  className={footBtn}
+                  title="Save your progress and leave"
+                >
+                  <Pause className="h-5 w-5" />
+                  Pause
+                </Link>
+                <button type="button" onClick={() => confirmDialogRef.current?.showModal()} className={footBtn}>
+                  <LogOut className="h-4 w-4" />
+                  End
+                </button>
+              </>
             ) : (
-              <Link
-                href={`/test/${initialTest.id}/results`}
-                className="inline-flex items-center gap-1.5 rounded-md bg-white/15 px-3 py-1.5 font-semibold hover:bg-white/25"
-              >
-                <LogOut className="h-3.5 w-3.5" />
+              <Link href={`/test/${initialTest.id}/results`} className={footBtn}>
+                <LogOut className="h-4 w-4" />
                 Results
               </Link>
             )}
-            <span className="hidden text-white/80 md:inline">
-              Answered <strong className="text-white">{answeredCount}</strong>/{items.length} · Marked{" "}
-              <strong className="text-white">{markedCount}</strong>
-            </span>
           </div>
 
-          <div className="flex items-center gap-1" role="group" aria-label="How well do you know this item?">
+          <div className="hidden items-center gap-1 text-xs md:flex" role="group" aria-label="How well do you know this item?">
             {CONFIDENCE_FLAGS.map((f) => {
               const on = confidence[current.position] === f.key;
               return (
@@ -803,37 +725,51 @@ export function TestRunnerClient({
             })}
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center">
             {!initialTest.adaptive && (
               <>
                 <button
                   type="button"
                   disabled={idx === 0 || busy}
                   onClick={() => void syncAnswer({ nextIndex: Math.max(0, idx - 1) })}
-                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-semibold hover:bg-white/15 disabled:opacity-40"
+                  className={footBtn}
                 >
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                  Previous
+                  <ArrowLeft className="h-4 w-4" />
+                  <span className="hidden sm:inline">Previous</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => navDialogRef.current?.showModal()}
-                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-semibold hover:bg-white/15"
-                >
-                  <Compass className="h-3.5 w-3.5" />
-                  Navigate
-                </button>
-                <button
-                  type="button"
-                  disabled={idx >= items.length - 1 || busy}
-                  onClick={() => void syncAnswer({ nextIndex: idx + 1 })}
-                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-semibold hover:bg-white/15 disabled:opacity-40"
-                >
-                  Next
-                  <ArrowRight className="h-3.5 w-3.5" />
+                <button type="button" onClick={() => navDialogRef.current?.showModal()} className={footBtn}>
+                  <Compass className="h-4 w-4" />
+                  <span className="hidden sm:inline">Navigate</span>
                 </button>
               </>
             )}
+
+            {adaptivePending ? (
+              <button type="button" disabled={busy || current.response === null} onClick={() => void syncAnswer({ submit: true })} className={footPrimary}>
+                Submit &amp; Next
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            ) : tutorPending ? (
+              <button type="button" disabled={busy || current.response === null} onClick={() => void syncAnswer({ submit: true })} className={footPrimary}>
+                <CheckCircle2 className="h-4 w-4" />
+                Submit
+              </button>
+            ) : showFinish ? (
+              <button type="button" onClick={() => confirmDialogRef.current?.showModal()} className={footPrimary}>
+                <CheckCircle2 className="h-4 w-4" />
+                Finish
+              </button>
+            ) : !initialTest.adaptive ? (
+              <button
+                type="button"
+                disabled={isLast || busy}
+                onClick={() => void syncAnswer({ nextIndex: idx + 1 })}
+                className={footBtn}
+              >
+                Next
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            ) : null}
           </div>
         </div>
       </footer>
@@ -1468,33 +1404,37 @@ function QuestionTypeRenderer({
     const keyMap = (reveal?.answer as MatrixAnswer | undefined)?.map ?? {};
 
     return (
-      <div className="table-wrapper" tabIndex={0} role="region" aria-label="Matrix question grid">
-        <table className="table text-xs sm:text-sm">
+      <div className="max-w-full overflow-x-auto" tabIndex={0} role="region" aria-label="Matrix question grid">
+        <table className="w-full border-collapse border border-border text-[15px]">
           <thead>
-            <tr>
-              <th>Finding / Row</th>
+            <tr className="bg-[#dbe8fb] text-[#0b2447]">
+              <th scope="col" className="px-3 py-2 text-left font-bold">
+                Client Findings
+              </th>
               {content.columns.map((col) => (
-                <th key={col.id} className="text-center">
+                <th key={col.id} scope="col" className="px-3 py-2 text-center font-bold">
                   {col.text}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {content.rows.map((row) => {
+            {content.rows.map((row, ri) => {
               const rowVal = map[row.id];
               const rowKey = keyMap[row.id];
               return (
-                <tr key={row.id}>
-                  <th className="font-medium text-left">{row.text}</th>
+                <tr key={row.id} className={ri % 2 === 0 ? "bg-muted/60" : "bg-surface"}>
+                  <th scope="row" className="px-3 py-3 text-left font-normal leading-snug">
+                    {ri + 1}. {row.text}
+                  </th>
                   {content.columns.map((col) => {
                     const checked = Array.isArray(rowVal) ? rowVal.includes(col.id) : rowVal === col.id;
                     const isKey = Array.isArray(rowKey) ? rowKey.includes(col.id) : rowKey === col.id;
                     return (
                       <td
                         key={col.id}
-                        className={`text-center ${
-                          reveal && isKey ? "bg-emerald-500/15" : reveal && checked && !isKey ? "bg-rose-500/15" : ""
+                        className={`px-3 py-3 text-center align-middle ${
+                          reveal && isKey ? "bg-emerald-500/20" : reveal && checked && !isKey ? "bg-rose-500/20" : ""
                         }`}
                       >
                         <input
@@ -1503,6 +1443,7 @@ function QuestionTypeRenderer({
                           aria-label={`${row.text} — ${col.text}`}
                           checked={checked}
                           disabled={locked}
+                          className="h-5 w-5 cursor-pointer align-middle accent-[#1a73c8]"
                           onChange={() => {
                             if (content.multi) {
                               const cur = Array.isArray(rowVal) ? rowVal : rowVal ? [rowVal] : [];
@@ -1521,6 +1462,9 @@ function QuestionTypeRenderer({
             })}
           </tbody>
         </table>
+        <p className="mt-6 text-[15px]">
+          Note: Each row must have {content.multi ? "at least 1" : "1"} response option selected.
+        </p>
       </div>
     );
   }
