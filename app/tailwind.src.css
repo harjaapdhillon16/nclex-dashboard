@@ -7,9 +7,9 @@
 
 :root {
   color-scheme: light dark;
-  --sidebar: #0f1c5c;
-  --sidebar-fg: #dfe5ff;
-  --sidebar-muted: #9aa8e6;
+  --sidebar: #14162b;
+  --sidebar-fg: #e4e6f5;
+  --sidebar-muted: #8f94b8;
   --sidebar-active: rgb(255 255 255 / .12);
   --hero: linear-gradient(135deg, #1b33a1 0%, #2747d0 55%, #3b62f0 100%);
 
@@ -21,7 +21,7 @@
   }
 }
 :root[data-theme="dark"] {
-  --sidebar: #0a1033;
+  --sidebar: #0c0d1c;
   --surface-muted: oklch(24% 0.01 270);
 }
 
@@ -125,4 +125,21 @@ dialog::backdrop {
 @media print {
   .no-print { display: none !important; }
   body { background: #fff; }
+}
+
+/* Landing page: scrolling announcement bar and dotted-grid canvas */
+@keyframes qx-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.qx-marquee { animation: qx-marquee 45s linear infinite; }
+@keyframes qx-float { 0%, 100% { transform: translateY(0) rotate(var(--r, 0deg)); } 50% { transform: translateY(-8px) rotate(var(--r, 0deg)); } }
+.qx-float { animation: qx-float 7s ease-in-out infinite; }
+.qx-dots { background-image: radial-gradient(rgb(255 255 255 / .07) 1px, transparent 1px); background-size: 22px 22px; }
+@media (prefers-reduced-motion: reduce) { .qx-marquee, .qx-float { animation: none; } }
+
+/* Landing hero: blocky "pixel" glow, built from a gradient cut by a square grid mask */
+.qx-pixels {
+  background: radial-gradient(60% 70% at 25% 100%, #a78bfa 0%, #7c3aed 28%, rgb(91 33 182 / .55) 52%, transparent 75%);
+  -webkit-mask-image: repeating-linear-gradient(0deg, #000 0 15px, transparent 15px 18px), repeating-linear-gradient(90deg, #000 0 15px, transparent 15px 18px);
+  -webkit-mask-composite: source-in;
+  mask-image: repeating-linear-gradient(0deg, #000 0 15px, transparent 15px 18px), repeating-linear-gradient(90deg, #000 0 15px, transparent 15px 18px);
+  mask-composite: intersect;
 }

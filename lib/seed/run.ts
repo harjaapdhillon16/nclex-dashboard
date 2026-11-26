@@ -39,7 +39,31 @@ async function main() {
       status: e.status ?? "published", questionTypes: e.questionTypes, scoring: e.scoring, features: e.features, axes: e.axes,
       durationMinutes: e.durationMinutes, mockQuestionCount: e.mockQuestionCount, blueprint: { note: e.blueprintNote, version: "2026.1" }, displayOrder: i,
     }).onConflictDoNothing().returning();
-    if (!row) continue; // already seeded; keep admin edits
+    if (!row) {
+      // Already seeded: never overwrite admin edits, but additively backfill any subjects/systems/topics
+      // that the catalogue now defines and the exam does not have yet.
+      const [existing] = await db.select().from(exams).where(eq(exams.slug, e.slug)).limit(1);
+      if (!existing) continue;
+      const have = await db.select().from(taxonomy).where(eq(taxonomy.examId, existing.id));
+      const key = (kind: string, name: string) => `${kind}|${name.toLowerCase()}`;
+      const haveKeys = new Set(have.map((t) => key(t.kind, t.name)));
+      let order = have.length;
+      for (const node of e.taxonomy) {
+        let parentId = have.find((t) => key(t.kind, t.name) === key(node.kind, node.name))?.id;
+        if (!parentId) {
+          [{ id: parentId }] = await db.insert(taxonomy).values({ examId: existing.id, kind: node.kind, name: node.name, weight: node.weight ?? null, displayOrder: order++ }).returning({ id: taxonomy.id });
+          haveKeys.add(key(node.kind, node.name));
+        }
+        // One batched insert per node (a round trip per topic is far too slow on a remote database).
+        const fresh = (node.children ?? []).filter((child) => !haveKeys.has(key("topic", child)));
+        for (let i = 0; i < fresh.length; i += 400) {
+          const chunk = fresh.slice(i, i + 400);
+          await db.insert(taxonomy).values(chunk.map((name) => ({ examId: existing.id, kind: "topic", name, parentId, displayOrder: order++ })));
+          for (const name of chunk) haveKeys.add(key("topic", name));
+        }
+      }
+      continue;
+    }
     for (const [j, node] of e.taxonomy.entries()) {
       const [parent] = await db.insert(taxonomy).values({ examId: row.id, kind: node.kind, name: node.name, weight: node.weight ?? null, displayOrder: j }).returning();
       if (node.children?.length) {

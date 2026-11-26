@@ -1,4 +1,7 @@
 import type { QuestionType } from "@/lib/questions/types";
+import { SYLLABUS as MEDICAL_CORE_SYLLABUS } from "./syllabus/medical-core";
+import { SYLLABUS as BOARDS_PA_MCAT_SYLLABUS } from "./syllabus/boards-pa-mcat";
+import { SYLLABUS as NURSING_PHARMACY_SYLLABUS } from "./syllabus/nursing-pharmacy";
 
 /** Scoring model config. Every estimate is labelled a practice estimate in the UI. */
 export type ScoringModel =
@@ -126,6 +129,197 @@ const NCLEX_TYPES: QuestionType[] = ["mcq", "sata", "multiple_response", "ordere
 const sections = (names: [string, number?, string[]?][]): SeedTaxonomy[] => names.map(([name, weight, children]) => ({ kind: "section", name, weight, children }));
 
 /* ------------------------------------------------------------------ */
+/* Medical & nursing-school exams: subject x system structure.         */
+/* Subject / system filters follow the way major QBanks slice content, */
+/* so a learner can build a test by discipline or by organ system.     */
+/* ------------------------------------------------------------------ */
+const subj = (name: string, children: string[] = []): SeedTaxonomy => ({ kind: "subject", name, children });
+const systems = (names: string[]): SeedTaxonomy[] => names.map((name) => ({ kind: "system", name }));
+
+const STEP1_SYSTEMS = systems([
+  "Cardiovascular", "Respiratory", "Renal and Urinary", "Gastrointestinal", "Endocrine", "Reproductive",
+  "Musculoskeletal and Connective Tissue", "Nervous System", "Hematology and Oncology", "Immune System", "Dermatology",
+  "Ear, Nose and Throat", "Ophthalmology", "Behavioral Health", "Biochemistry and Nutrition", "Genetics", "Biostatistics and Epidemiology",
+  "Ethics, Safety and Communication", "Multisystem Processes",
+]);
+
+const CLINICAL_SYSTEMS = systems([
+  "Cardiovascular", "Respiratory", "Renal and Urinary", "Gastrointestinal and Nutrition", "Endocrine, Diabetes and Metabolism",
+  "Reproductive and Endocrine", "Musculoskeletal and Rheumatology", "Nervous System and Special Senses", "Hematology and Oncology",
+  "Infectious Diseases", "Dermatology", "Behavioral Health", "Pregnancy, Childbirth and the Puerperium", "Biostatistics and Epidemiology",
+  "Ethics, Law and Patient Safety", "Multisystem Processes",
+]);
+
+const medExam = (o: {
+  slug: string; name: string; shortName: string; category?: string; subjects: SeedTaxonomy[]; systems: SeedTaxonomy[];
+  duration: number; mock: number; description?: string; scoring?: ScoringModel; features?: Record<FeatureKey, boolean>;
+  note?: string;
+}): SeedExam => ({
+  slug: o.slug, name: o.name, shortName: o.shortName, category: o.category ?? "medical",
+  description: o.description ?? `${o.name} preparation with clinical vignettes, image- and lab-based items, timed blocks, subject and system analytics and a built-in study schedule.`,
+  questionTypes: ["mcq", "trend"],
+  scoring: o.scoring ?? { type: "percent", passPercent: 65 },
+  features: o.features ?? feats(["caseStudies", "adaptive"]),
+  durationMinutes: o.duration, mockQuestionCount: o.mock,
+  axes: ["subject", "system", "topic"], taxonomy: [...o.subjects, ...o.systems],
+  blueprintNote: o.note ?? `Subjects and systems reflect the publicly described ${o.name} content outline at a high level; validate against the current official outline.`,
+});
+
+const MEDICAL_EXAMS: SeedExam[] = [
+  medExam({
+    slug: "usmle-step-1", name: "USMLE Step 1", shortName: "Step 1", duration: 480, mock: 280,
+    subjects: [
+      subj("Anatomy", ["Gross anatomy", "Neuroanatomy", "Embryology", "Histology and cell biology", "Imaging and surface anatomy"]),
+      subj("Behavioral Science", ["Human development", "Learning and memory", "Sleep", "Psychopathology", "Substance use", "Sexuality and gender"]),
+      subj("Biochemistry and Nutrition", ["Metabolism", "Vitamins and minerals", "Enzymes", "Molecular biology", "Lysosomal and glycogen storage diseases"]),
+      subj("Biostatistics and Epidemiology", ["Study design", "Bias and confounding", "Test characteristics", "Hypothesis testing", "Risk measures"]),
+      subj("Genetics", ["Inheritance patterns", "Population genetics", "Chromosomal disorders", "Trinucleotide repeats"]),
+      subj("Immunology", ["Innate immunity", "Adaptive immunity", "Hypersensitivity", "Immunodeficiency", "Transplant and tolerance"]),
+      subj("Microbiology", ["Bacteriology", "Virology", "Mycology", "Parasitology", "Antimicrobial therapy"]),
+      subj("Pathology", ["Cell injury and inflammation", "Neoplasia", "Hemodynamics", "Environmental pathology", "Organ-system pathology"]),
+      subj("Pharmacology", ["Pharmacokinetics", "Pharmacodynamics", "Autonomic drugs", "Drug toxicities", "Drug interactions"]),
+      subj("Physiology", ["Cardiovascular physiology", "Respiratory physiology", "Renal physiology and acid-base", "Endocrine physiology", "Gastrointestinal physiology"]),
+      subj("Ethics, Safety and Communication", ["Informed consent", "Confidentiality", "Medical errors", "Breaking bad news"]),
+    ],
+    systems: STEP1_SYSTEMS,
+  }),
+  medExam({
+    slug: "usmle-step-2-ck", name: "USMLE Step 2 CK", shortName: "Step 2 CK", duration: 540, mock: 318,
+    subjects: [
+      subj("Internal Medicine", ["Cardiology", "Pulmonology", "Gastroenterology", "Nephrology", "Endocrinology", "Hematology and Oncology", "Infectious Diseases", "Rheumatology", "Geriatrics"]),
+      subj("Surgery", ["Trauma", "Acute abdomen", "Perioperative care", "Vascular surgery", "Surgical oncology", "Burns"]),
+      subj("Pediatrics", ["Neonatology", "Growth and development", "Congenital disorders", "Pediatric infections", "Pediatric emergencies"]),
+      subj("Obstetrics and Gynecology", ["Prenatal care", "Obstetric complications", "Labor and delivery", "Gynecologic disorders", "Reproductive endocrinology"]),
+      subj("Psychiatry", ["Mood disorders", "Psychotic disorders", "Anxiety disorders", "Substance use", "Psychopharmacology"]),
+      subj("Neurology", ["Stroke", "Seizures", "Headache", "Neuromuscular disease", "Neurodegenerative disease"]),
+      subj("Emergency Medicine", ["Resuscitation", "Toxicology", "Environmental emergencies", "Shock"]),
+      subj("Family Medicine", ["Preventive care and screening", "Chronic disease management", "Musculoskeletal complaints"]),
+      subj("Biostatistics, Ethics and Patient Safety", ["Study design", "Screening tests", "Medical ethics", "Quality improvement"]),
+    ],
+    systems: CLINICAL_SYSTEMS,
+  }),
+  medExam({
+    slug: "usmle-step-3", name: "USMLE Step 3", shortName: "Step 3", duration: 900, mock: 413,
+    subjects: [
+      subj("Foundations of Independent Practice", ["Biostatistics and epidemiology", "Ethics and professionalism", "Patient safety", "Communication", "Health systems"]),
+      subj("Advanced Clinical Medicine", ["Diagnosis", "Prognosis", "Management of chronic illness", "Acute care", "Prevention and screening"]),
+      subj("Internal Medicine"), subj("Surgery"), subj("Pediatrics"), subj("Obstetrics and Gynecology"), subj("Psychiatry"), subj("Emergency Medicine"),
+      subj("Computer-based Case Simulations (CCS)", ["Initial work-up", "Ongoing management", "Disposition"]),
+    ],
+    systems: CLINICAL_SYSTEMS,
+  }),
+  medExam({
+    slug: "comlex-level-1", name: "COMLEX-USA Level 1", shortName: "COMLEX 1", duration: 480, mock: 352,
+    subjects: [
+      subj("Osteopathic Principles, Practice and Manipulation", ["Somatic dysfunction", "Muscle energy and HVLA", "Fascial and counterstrain techniques", "Cranial osteopathy", "Autonomic nervous system and viscerosomatic reflexes"]),
+      subj("Anatomy", ["Gross anatomy", "Neuroanatomy", "Embryology", "Histology"]),
+      subj("Biochemistry"), subj("Microbiology and Immunology"), subj("Pathology"), subj("Pharmacology"), subj("Physiology"), subj("Behavioral Science and Ethics"),
+      subj("Biostatistics and Epidemiology"),
+    ],
+    systems: STEP1_SYSTEMS,
+  }),
+  medExam({
+    slug: "comlex-level-2", name: "COMLEX-USA Level 2-CE", shortName: "COMLEX 2", duration: 480, mock: 352,
+    subjects: [
+      subj("Osteopathic Principles, Practice and Manipulation", ["Diagnosis of somatic dysfunction", "Manipulative treatment by region", "Indications and contraindications"]),
+      subj("Internal Medicine"), subj("Surgery"), subj("Obstetrics and Gynecology"), subj("Pediatrics"), subj("Psychiatry"), subj("Emergency Medicine"),
+      subj("Family Medicine and Community Health"), subj("Geriatrics and Palliative Care"),
+    ],
+    systems: CLINICAL_SYSTEMS,
+  }),
+  medExam({
+    slug: "abim", name: "Internal Medicine (ABIM)", shortName: "ABIM", duration: 600, mock: 240,
+    description: "ABIM Internal Medicine certification and MOC preparation with board-style vignettes, image- and ECG-based items and subspecialty analytics.",
+    subjects: [
+      subj("Cardiovascular Disease"), subj("Endocrinology, Diabetes and Metabolism"), subj("Gastroenterology"), subj("Infectious Disease"), subj("Nephrology"),
+      subj("Pulmonary Disease and Critical Care"), subj("Hematology"), subj("Medical Oncology"), subj("Rheumatology"), subj("Allergy and Immunology"),
+      subj("Neurology"), subj("Psychiatry"), subj("Dermatology"), subj("Geriatric Medicine"), subj("Women's Health"), subj("Ethics and Patient Safety"),
+    ],
+    systems: CLINICAL_SYSTEMS,
+  }),
+  medExam({
+    slug: "abfm", name: "Family Medicine (ABFM)", shortName: "ABFM", duration: 480, mock: 300,
+    description: "ABFM certification and Continuous Certification preparation across the whole lifespan, organised by clinical domain and organ system.",
+    subjects: [
+      subj("Acute Care and Diagnosis", ["Common presenting complaints", "Infections", "Injuries"]),
+      subj("Chronic Care Management", ["Diabetes", "Hypertension", "COPD and asthma", "Heart failure", "Chronic kidney disease"]),
+      subj("Emergent and Urgent Care"), subj("Preventive Care and Screening"), subj("Foundations of Care"),
+      subj("Maternity and Newborn Care"), subj("Pediatrics and Adolescent Medicine"), subj("Geriatrics and Palliative Care"), subj("Mental Health and Substance Use"),
+    ],
+    systems: CLINICAL_SYSTEMS,
+  }),
+  medExam({
+    slug: "preclinical-qbank", name: "Preclinical QBank", shortName: "Preclinical", duration: 240, mock: 160,
+    description: "Course-aligned basic-science practice for the first two years of medical school: build quizzes by discipline or organ system and track mastery all year long.",
+    subjects: [
+      subj("Anatomy"), subj("Histology and Cell Biology"), subj("Embryology"), subj("Biochemistry"), subj("Genetics"), subj("Immunology"), subj("Microbiology"),
+      subj("Pathology"), subj("Pharmacology"), subj("Physiology"), subj("Neuroscience"), subj("Behavioral Science"), subj("Biostatistics and Epidemiology"),
+    ],
+    systems: STEP1_SYSTEMS, scoring: { type: "percent", passPercent: 70 }, features: feats(["caseStudies", "adaptive"]),
+    note: "Disciplines and systems follow the typical first-two-year medical curriculum; map to your school's own course list.",
+  }),
+  medExam({
+    slug: "clinical-qbank", name: "Clinical QBank", shortName: "Clinical", duration: 240, mock: 160,
+    description: "Clerkship and shelf-exam practice: build quizzes by rotation or organ system with clinical vignettes, management questions and next-best-step items.",
+    subjects: [
+      subj("Internal Medicine"), subj("Surgery"), subj("Pediatrics"), subj("Obstetrics and Gynecology"), subj("Psychiatry"), subj("Neurology"),
+      subj("Family Medicine"), subj("Emergency Medicine"), subj("Ambulatory Care"),
+    ],
+    systems: CLINICAL_SYSTEMS, scoring: { type: "percent", passPercent: 70 },
+    note: "Rotations mirror the usual third- and fourth-year clerkships; map to your school's shelf exam outlines.",
+  }),
+  medExam({
+    slug: "ukmla", name: "UKMLA Applied Knowledge Test", shortName: "UKMLA AKT", duration: 360, mock: 200,
+    subjects: [subj("Acute and Emergency"), subj("Cancer"), subj("Cardiovascular"), subj("Medicine of Older Adults"), subj("Mental Health"), subj("Child Health"), subj("Clinical Pharmacology"), subj("Ethics, Law and Professionalism")],
+    systems: CLINICAL_SYSTEMS,
+  }),
+  medExam({
+    slug: "plab", name: "PLAB 1", shortName: "PLAB 1", duration: 180, mock: 180,
+    subjects: [subj("Acute Medicine"), subj("Surgery"), subj("General Practice"), subj("Obstetrics and Gynaecology"), subj("Paediatrics"), subj("Ethics and Law")],
+    systems: CLINICAL_SYSTEMS, scoring: { type: "passfail", passPercent: 63 },
+  }),
+];
+
+/** Nursing programme courses (pre-licensure exam prep alongside the licensure exams). */
+const NURSING_SCHOOL_EXAM: SeedExam = {
+  slug: "nursing-school", name: "Nursing School Exam Prep", shortName: "Nursing School", category: "nursing",
+  description: "Course-by-course practice for pre-licensure nursing programmes: fundamentals, med-surg, pharmacology, maternity, paediatrics, mental health, community health and leadership, with ATI/HESI-style test items.",
+  questionTypes: NCLEX_TYPES, scoring: { type: "percent", passPercent: 80 }, features: feats(), durationMinutes: 180, mockQuestionCount: 100,
+  axes: ["subject", "system", "topic"],
+  taxonomy: [
+    subj("Fundamentals of Nursing", ["Nursing process", "Vital signs and assessment", "Safety and infection control", "Hygiene and comfort", "Documentation", "Basic skills"]),
+    subj("Medical-Surgical Nursing", ["Cardiovascular", "Respiratory", "Neurological", "Renal and urinary", "Gastrointestinal", "Endocrine", "Musculoskeletal", "Oncology", "Perioperative care"]),
+    subj("Pharmacology", ["Drug classes", "Medication administration", "Dosage calculations", "Adverse effects", "Patient teaching"]),
+    subj("Maternal and Newborn Nursing", ["Antepartum", "Intrapartum", "Postpartum", "Newborn care", "Obstetric complications"]),
+    subj("Pediatric Nursing", ["Growth and development", "Paediatric assessment", "Common childhood illness", "Immunisations", "Child safety"]),
+    subj("Mental Health Nursing", ["Therapeutic communication", "Mood and anxiety disorders", "Psychosis", "Substance use", "Crisis care"]),
+    subj("Community and Public Health Nursing", ["Epidemiology", "Health promotion", "Screening", "Environmental health", "Disaster preparedness"]),
+    subj("Gerontological Nursing", ["Ageing changes", "Falls and safety", "Dementia and delirium", "Polypharmacy", "End-of-life care"]),
+    subj("Leadership and Management", ["Delegation", "Prioritisation", "Ethics and legal issues", "Quality improvement", "Conflict resolution"]),
+    subj("Anatomy, Physiology and Pathophysiology", ["Body systems", "Fluid and electrolytes", "Acid-base balance", "Disease processes"]),
+    subj("Nutrition and Dietetics", ["Macronutrients and micronutrients", "Therapeutic diets", "Enteral and parenteral nutrition"]),
+    subj("Nursing Research and Evidence-Based Practice", ["Study designs", "Critical appraisal", "Applying evidence"]),
+    ...NCLEX_SYSTEMS,
+  ],
+  blueprintNote: "Course list follows the typical pre-licensure nursing curriculum; map to your own programme's syllabus.",
+};
+
+const UMPJE_EXAM: SeedExam = {
+  slug: "umpje", name: "UMPJE (Uniform MPJE)", shortName: "UMPJE", category: "pharmacy",
+  description: "Multi-state pharmacy jurisprudence preparation covering federal and state law, dispensing, compounding, controlled substances and pharmacy operations.",
+  questionTypes: ["mcq", "sata", "numeric", "ordered"], scoring: { type: "scaled", min: 0, max: 100, passMark: 75, label: "Scaled score" },
+  features: feats(["caseStudies", "adaptive"]), durationMinutes: 120, mockQuestionCount: 100,
+  axes: ["section", "topic"],
+  taxonomy: sections([
+    ["Pharmacy Practice", 35, ["Dispensing", "Counselling", "Compounding", "Immunisation authority"]],
+    ["Licensure, Registration and Operations", 30, ["Licensure", "Facilities and permits", "Technicians and staffing", "Records"]],
+    ["Controlled Substances", 20, ["Schedules", "DEA requirements", "Prescription rules", "Diversion and reporting"]],
+    ["General Regulatory Processes", 15, ["FDA regulation", "Recalls", "Adverse event reporting", "Privacy law"]],
+  ]),
+  blueprintNote: "Areas reflect the publicly described NABP competency statements at a high level; validate against the current version.",
+};
+
+/* ------------------------------------------------------------------ */
 /* Exam catalogue. Admins can edit/disable/remove any of these in-app. */
 /* ------------------------------------------------------------------ */
 export const EXAMS: SeedExam[] = [
@@ -167,29 +361,9 @@ export const EXAMS: SeedExam[] = [
     axes: ["section", "topic"], taxonomy: sections([["Unit Conversions", 15, ["Metric conversions", "Household to metric"]], ["Oral Dosage", 20, ["Tablets", "Liquids"]], ["Parenteral Dosage", 20, ["Injections", "Reconstitution"]], ["IV Calculations", 25, ["Flow rates (mL/hr)", "Drip rates (gtt/min)", "Infusion time"]], ["Weight-Based and Pediatric Dosing", 20, ["mg/kg dosing", "Safe dose range", "Titrations"]]]),
     blueprintNote: "Internal competency course; no external blueprint.",
   },
+  NURSING_SCHOOL_EXAM,
   // MEDICAL
-  ...(
-    [
-      ["usmle-step-1", "USMLE Step 1", "Step 1", ["Anatomy", "Biochemistry", "Microbiology", "Pathology", "Pharmacology", "Physiology", "Behavioral Science", "Immunology"], 480, 280],
-      ["usmle-step-2-ck", "USMLE Step 2 CK", "Step 2 CK", ["Internal Medicine", "Surgery", "Pediatrics", "Obstetrics and Gynecology", "Psychiatry", "Neurology", "Emergency Medicine", "Preventive Medicine"], 540, 318],
-      ["usmle-step-3", "USMLE Step 3", "Step 3", ["Foundations of Independent Practice", "Advanced Clinical Medicine", "Biostatistics and Epidemiology", "Patient Safety"], 900, 413],
-      ["comlex-level-1", "COMLEX-USA Level 1", "COMLEX L1", ["Osteopathic Principles and Practice", "Foundational Biomedical Sciences", "Health Promotion", "Patient Presentations"], 480, 352],
-      ["comlex-level-2", "COMLEX-USA Level 2-CE", "COMLEX L2", ["Osteopathic Principles and Practice", "Clinical Medicine", "Surgery", "Women's Health", "Pediatrics"], 480, 352],
-      ["ukmla", "UKMLA Applied Knowledge Test", "UKMLA AKT", ["Acute and Emergency", "Cancer", "Cardiovascular", "Medicine of Older Adults", "Mental Health", "Child Health", "Clinical Pharmacology"], 360, 200],
-      ["plab", "PLAB 1", "PLAB 1", ["Acute Medicine", "Surgery", "General Practice", "Obstetrics and Gynaecology", "Paediatrics", "Ethics and Law"], 180, 180],
-      ["abim", "ABIM Internal Medicine Certification", "ABIM", ["Cardiovascular Disease", "Endocrinology", "Gastroenterology", "Infectious Disease", "Nephrology", "Pulmonary and Critical Care", "Hematology and Oncology", "Rheumatology"], 600, 240],
-      ["abfm", "ABFM Family Medicine Certification", "ABFM", ["Acute Care", "Chronic Care", "Emergent and Urgent Care", "Preventive Care", "Foundations of Care"], 480, 300],
-    ] as [string, string, string, string[], number, number][]
-  ).map(([slug, name, shortName, secs, duration, mock]) => ({
-    slug, name, shortName, category: "medical",
-    description: `${name} preparation with clinical vignettes, single-best-answer items, image- and lab-based questions, timed blocks and subject analytics.`,
-    questionTypes: ["mcq", "trend"] as QuestionType[],
-    scoring: (slug.startsWith("usmle") || slug.startsWith("comlex") || slug.startsWith("ab") ? { type: "percent", passPercent: 65 } : { type: "passfail", passPercent: 63 }) as ScoringModel,
-    features: feats(["caseStudies", "adaptive"]), durationMinutes: duration, mockQuestionCount: mock,
-    axes: ["subject", "system", "topic"] as TaxonomyKind[],
-    taxonomy: [...secs.map((n) => ({ kind: "subject" as const, name: n })), ...NCLEX_SYSTEMS],
-    blueprintNote: `Subjects reflect the publicly described ${name} content outline at a high level; validate against the current official outline.`,
-  })),
+  ...MEDICAL_EXAMS,
   // DENTAL
   {
     slug: "dat", name: "Dental Admission Test (DAT)", shortName: "DAT", category: "dental",
@@ -229,6 +403,7 @@ export const EXAMS: SeedExam[] = [
     axes: ["section", "topic"] as TaxonomyKind[], taxonomy: sections(secs.map((s) => [s])),
     blueprintNote: "Areas reflect the publicly described NABP competency statements at a high level; validate against the current version.",
   })),
+  UMPJE_EXAM,
   // PA
   ...(
     [
@@ -359,3 +534,27 @@ export const EXAMS: SeedExam[] = [
     blueprintNote: `Validate against the current ${shortName} official outline.`,
   })),
 ];
+
+/* ------------------------------------------------------------------ */
+/* Deep syllabi: replace the compact starter taxonomies above.         */
+/* Published weights are dropped where they were not verified against  */
+/* the official outline, so the UI never shows an unchecked "% of exam". */
+/* ------------------------------------------------------------------ */
+const DEEP_SYLLABUS: Record<string, SeedTaxonomy[]> = {
+  ...MEDICAL_CORE_SYLLABUS,
+  ...BOARDS_PA_MCAT_SYLLABUS,
+  ...NURSING_PHARMACY_SYLLABUS,
+};
+/** Exams whose published category weights come from the official test plan and are kept. */
+const KEEP_WEIGHTS = new Set(["nclex-pn"]);
+for (const exam of EXAMS) {
+  const deep = DEEP_SYLLABUS[exam.slug];
+  if (!deep?.length) continue;
+  const nodes = deep.map((n) => (KEEP_WEIGHTS.has(exam.slug) ? n : { ...n, weight: undefined }));
+  // NCLEX-RN keeps its client-needs categories (with weights); the deep syllabus adds subjects and systems.
+  exam.taxonomy = exam.slug === "nclex-rn" ? [...exam.taxonomy.filter((n) => n.kind === "category"), ...nodes] : nodes;
+  exam.axes = Array.from(new Set(exam.taxonomy.map((n) => n.kind))).sort(
+    (a, b) => (["category", "subject", "section", "system"].indexOf(a) + 1 || 9) - (["category", "subject", "section", "system"].indexOf(b) + 1 || 9),
+  ) as TaxonomyKind[];
+  if (!exam.axes.includes("topic")) exam.axes.push("topic");
+}

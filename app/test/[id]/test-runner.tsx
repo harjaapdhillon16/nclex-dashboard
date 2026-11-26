@@ -13,6 +13,7 @@ import {
   Calculator,
   CheckCircle2,
   Clock,
+  Compass,
   Eye,
   EyeOff,
   Flag,
@@ -20,12 +21,14 @@ import {
   Grid,
   HelpCircle,
   Lightbulb,
+  LogOut,
   Mic,
   NotebookPen,
   Play,
   RotateCcw,
   ShieldAlert,
   Sparkles,
+  Tag,
   X,
   XCircle,
 } from "lucide-react";
@@ -75,6 +78,14 @@ type RunnerItem = {
   note: string;
   reveal: Reveal | null;
 };
+
+type ConfidenceFlag = "learning" | "reviewing" | "mastered";
+
+const CONFIDENCE_FLAGS: { key: ConfidenceFlag; label: string; idle: string; active: string }[] = [
+  { key: "learning", label: "Learning", idle: "bg-[#e8856f]/25 text-[#ffd9d1]", active: "bg-[#e8856f] text-white" },
+  { key: "reviewing", label: "Reviewing", idle: "bg-[#f1c84b]/25 text-[#fff1bf]", active: "bg-[#f1c84b] text-[#3b2f00]" },
+  { key: "mastered", label: "Mastered", idle: "bg-[#59b86f]/25 text-[#d4f5dc]", active: "bg-[#59b86f] text-white" },
+];
 
 type LabRow = {
   id: number;
@@ -133,6 +144,30 @@ export function TestRunnerClient({
   const [labSearch, setLabSearch] = useState("");
   const [speakTimer, setSpeakTimer] = useState<number | null>(null);
   const [isRecordingSim, setIsRecordingSim] = useState(false);
+  /** Self-rated confidence per item (Learning / Reviewing / Mastered). Kept on this device only. */
+  const [confidence, setConfidence] = useState<Record<number, ConfidenceFlag>>({});
+  const confidenceKey = `qx-confidence-${initialTest.id}`;
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(confidenceKey);
+      if (raw) setConfidence(JSON.parse(raw) as Record<number, ConfidenceFlag>);
+    } catch {
+      /* storage unavailable: flags simply start empty */
+    }
+  }, [confidenceKey]);
+  function setConfidenceFlag(position: number, flag: ConfidenceFlag) {
+    setConfidence((prev) => {
+      const next = { ...prev };
+      if (next[position] === flag) delete next[position];
+      else next[position] = flag;
+      try {
+        window.localStorage.setItem(confidenceKey, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
 
   const calcDialogRef = useRef<HTMLDialogElement>(null);
   const labDialogRef = useRef<HTMLDialogElement>(null);
@@ -368,7 +403,7 @@ export function TestRunnerClient({
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       {/* Top Simulator Bar */}
-      <header className="sticky top-0 z-30 border-b border-border bg-sidebar text-sidebar-fg px-4 py-2.5 shadow">
+      <header className="sticky top-0 z-30 border-b border-[#144a85] bg-[#1b5ea8] text-white px-4 py-2.5 shadow">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <Link
@@ -384,19 +419,22 @@ export function TestRunnerClient({
 
             <div className="min-w-0">
               <div className="flex items-center gap-2 text-xs font-bold text-white truncate">
-                <span>{exam.shortName}</span>
-                <span>·</span>
-                <span className="truncate">{initialTest.name}</span>
-                <span className="rounded bg-white/15 px-1.5 py-0.5 text-[10px] uppercase">{initialTest.mode}</span>
+                <span className="uppercase tracking-wide">{exam.shortName} Test</span>
+                <span className="opacity-60">·</span>
+                <span className="truncate font-medium opacity-90">{initialTest.name}</span>
+                <span className="rounded bg-white/20 px-1.5 py-0.5 text-[10px] uppercase">{initialTest.mode}</span>
                 {initialTest.adaptive && (
-                  <span className="rounded bg-amber-400/20 text-amber-200 px-1.5 py-0.5 text-[10px]">
+                  <span className="rounded bg-amber-400/25 text-amber-100 px-1.5 py-0.5 text-[10px]">
                     CAT Adaptive
                   </span>
                 )}
               </div>
-              <div className="text-[11px] text-sidebar-muted truncate">
-                Item {idx + 1} of {items.length} ({q.code}) · {q.category ?? exam.name}
-                {q.topic ? ` › ${q.topic}` : ""}
+              <div className="text-[13px] font-semibold text-white truncate">
+                Item {idx + 1} of {items.length}
+                <span className="ml-2 text-[11px] font-normal text-white/70">
+                  {q.code} · {q.category ?? exam.name}
+                  {q.topic ? ` › ${q.topic}` : ""}
+                </span>
               </div>
             </div>
           </div>
@@ -653,18 +691,6 @@ export function TestRunnerClient({
             {/* Question Action Bar */}
             <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-border">
               <div className="flex items-center gap-2">
-                {!initialTest.adaptive && (
-                  <button
-                    type="button"
-                    disabled={idx === 0 || busy}
-                    onClick={() => void syncAnswer({ nextIndex: Math.max(0, idx - 1) })}
-                    className="btn btn-secondary btn-sm"
-                  >
-                    <ArrowLeft className="h-3.5 w-3.5" />
-                    Previous
-                  </button>
-                )}
-
                 {!isLocked && current.response !== null && (
                   <button
                     type="button"
@@ -700,17 +726,7 @@ export function TestRunnerClient({
                     Submit &amp; Next Adaptive Item
                     <ArrowRight className="h-4 w-4" />
                   </button>
-                ) : idx < items.length - 1 ? (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void syncAnswer({ nextIndex: idx + 1 })}
-                    className="btn btn-primary btn-sm"
-                  >
-                    Next Question
-                    <ArrowRight className="h-4 w-4" />
-                  </button>
-                ) : !isCompleted ? (
+                ) : idx < items.length - 1 ? null : !isCompleted ? (
                   <button
                     type="button"
                     onClick={() => confirmDialogRef.current?.showModal()}
@@ -742,20 +758,83 @@ export function TestRunnerClient({
       </main>
 
       {/* Bottom Sticky Navigation Bar */}
-      <footer className="no-print border-t border-border bg-surface px-4 py-2.5">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 text-xs">
-          <div className="muted">
-            Answered: <strong>{answeredCount}</strong> / {items.length} · Marked: <strong>{markedCount}</strong>
+      <footer className="no-print sticky bottom-0 z-30 border-t border-[#144a85] bg-[#1b5ea8] px-3 py-2 text-white shadow-[0_-2px_8px_rgba(0,0,0,.15)]">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs">
+          <div className="flex items-center gap-3">
+            {!isCompleted ? (
+              <button
+                type="button"
+                onClick={() => confirmDialogRef.current?.showModal()}
+                className="inline-flex items-center gap-1.5 rounded-md bg-white/15 px-3 py-1.5 font-semibold hover:bg-white/25"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                End
+              </button>
+            ) : (
+              <Link
+                href={`/test/${initialTest.id}/results`}
+                className="inline-flex items-center gap-1.5 rounded-md bg-white/15 px-3 py-1.5 font-semibold hover:bg-white/25"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                Results
+              </Link>
+            )}
+            <span className="hidden text-white/80 md:inline">
+              Answered <strong className="text-white">{answeredCount}</strong>/{items.length} · Marked{" "}
+              <strong className="text-white">{markedCount}</strong>
+            </span>
           </div>
-          {!isCompleted && (
-            <button
-              type="button"
-              onClick={() => confirmDialogRef.current?.showModal()}
-              className="btn btn-secondary btn-sm"
-            >
-              End &amp; Score Test
-            </button>
-          )}
+
+          <div className="flex items-center gap-1" role="group" aria-label="How well do you know this item?">
+            {CONFIDENCE_FLAGS.map((f) => {
+              const on = confidence[current.position] === f.key;
+              return (
+                <button
+                  key={f.key}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setConfidenceFlag(current.position, f.key)}
+                  className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-semibold transition ${on ? f.active : f.idle} hover:brightness-110`}
+                >
+                  <Tag className="h-3.5 w-3.5" />
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-1">
+            {!initialTest.adaptive && (
+              <>
+                <button
+                  type="button"
+                  disabled={idx === 0 || busy}
+                  onClick={() => void syncAnswer({ nextIndex: Math.max(0, idx - 1) })}
+                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-semibold hover:bg-white/15 disabled:opacity-40"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navDialogRef.current?.showModal()}
+                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-semibold hover:bg-white/15"
+                >
+                  <Compass className="h-3.5 w-3.5" />
+                  Navigate
+                </button>
+                <button
+                  type="button"
+                  disabled={idx >= items.length - 1 || busy}
+                  onClick={() => void syncAnswer({ nextIndex: idx + 1 })}
+                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-semibold hover:bg-white/15 disabled:opacity-40"
+                >
+                  Next
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </footer>
 

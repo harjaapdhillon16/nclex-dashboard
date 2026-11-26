@@ -9,6 +9,7 @@ import {
   BarChart3,
   Bot,
   BookOpen,
+  CalendarDays,
   CheckSquare,
   ClipboardCheck,
   ClipboardList,
@@ -22,6 +23,7 @@ import {
   Menu,
   Moon,
   PenLine,
+  Plus,
   ShieldAlert,
   Sparkles,
   Sun,
@@ -134,22 +136,38 @@ export function AppShell({
 
   const slug = currentExam.slug;
 
-  // The learner's whole product: five places, in the order they are used.
-  const mainNav = [
-    { href: `/exam/${slug}`, label: "Today", hint: "Your next step", icon: Activity },
-    { href: `/exam/${slug}/learn`, label: "Learn", hint: "Lessons, flashcards, practice by unit", icon: BookOpen },
-    { href: `/exam/${slug}/create`, label: "Practice", hint: "Questions with instant feedback", icon: PenLine },
-    { href: `/exam/${slug}/assessments`, label: "Assessments", hint: "Check where you stand", icon: ClipboardCheck },
-    { href: `/exam/${slug}/tests`, label: "Mock exams", hint: "Timed tests and your history", icon: ClipboardList },
-    { href: `/exam/${slug}/analytics`, label: "Progress", hint: "Scores and weak spots", icon: BarChart3 },
-  ];
-  const toolsNav = [
-    ...(currentExam.hasCheatSheets ? [{ href: `/exam/${slug}/cheat-sheets`, label: "Cheat sheets", icon: FileText }] : []),
-    { href: `/exam/${slug}/flashcards`, label: "Flashcards", icon: Layers },
-    ...(currentExam.hasImages ? [{ href: `/exam/${slug}/images`, label: "Medical images", icon: Images }] : []),
-    ...(currentExam.hasCases ? [{ href: `/exam/${slug}/cases`, label: "Case studies", icon: FlaskConical }] : []),
-    { href: `/exam/${slug}/review`, label: "Review my answers", icon: CheckSquare },
-    { href: `/exam/${slug}/assistant`, label: "Ask the AI tutor", icon: Bot },
+  // Grouped like a modern QBank: Home, then STUDY, REVIEW and RESOURCES.
+  type NavItem = { href: string; label: string; icon: typeof Activity };
+  const homeNav: NavItem = { href: `/exam/${slug}`, label: "Home", icon: Activity };
+  const navGroups: { title: string; items: NavItem[] }[] = [
+    {
+      title: "Study",
+      items: [
+        { href: `/exam/${slug}/learn`, label: "Subjects", icon: GraduationCap },
+        ...(currentExam.hasCases ? [{ href: `/exam/${slug}/cases`, label: "Case studies", icon: FlaskConical }] : []),
+        { href: `/exam/${slug}/create`, label: "Question bank", icon: PenLine },
+        { href: `/exam/${slug}/assessments`, label: "Readiness exams", icon: ClipboardCheck },
+        { href: `/exam/${slug}/study`, label: "Lessons & videos", icon: BookOpen },
+        ...(currentExam.hasCheatSheets ? [{ href: `/exam/${slug}/cheat-sheets`, label: "Cheat sheets", icon: FileText }] : []),
+        { href: `/exam/${slug}/flashcards`, label: "Flashcards", icon: Layers },
+        ...(currentExam.hasImages ? [{ href: `/exam/${slug}/images`, label: "Medical images", icon: Images }] : []),
+      ],
+    },
+    {
+      title: "Review",
+      items: [
+        { href: `/exam/${slug}/tests`, label: "Previous tests", icon: ClipboardList },
+        { href: `/exam/${slug}/analytics`, label: "Performance", icon: BarChart3 },
+        { href: `/exam/${slug}/review`, label: "Review my answers", icon: CheckSquare },
+      ],
+    },
+    {
+      title: "Resources",
+      items: [
+        { href: `/exam/${slug}/schedule`, label: "Study schedule", icon: CalendarDays },
+        { href: `/exam/${slug}/assistant`, label: "Ask the AI tutor", icon: Bot },
+      ],
+    },
   ];
   const adminNav = [
     { href: "/admin", label: "Content", icon: ShieldAlert },
@@ -235,49 +253,43 @@ export function AppShell({
               </select>
             </div>
 
-            <nav aria-label="Exam preparation" className="space-y-1">
-              {mainNav.map((item) => {
-                const Icon = item.icon;
-                const active = item.href === `/exam/${slug}` ? pathname === item.href : pathname.startsWith(item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={onNavigate}
-                    aria-current={active ? "page" : undefined}
-                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition ${
-                      active ? "bg-white/15 text-white" : "text-sidebar-fg/85 hover:bg-white/10 hover:text-white"
-                    }`}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-semibold leading-tight">{item.label}</span>
-                      <span className="block truncate text-[11px] font-normal text-sidebar-muted">{item.hint}</span>
-                    </span>
-                  </Link>
-                );
-              })}
-            </nav>
+            <Link
+              href={`/exam/${slug}/create`}
+              onClick={onNavigate}
+              className="flex items-center justify-center gap-2 rounded-xl bg-[#5b4ee6] px-3 py-2.5 text-sm font-bold text-white shadow-[0_3px_0_#3f33b3] transition hover:bg-[#6a5ef0] active:translate-y-px active:shadow-none"
+            >
+              <Plus className="h-4 w-4" />
+              Create Test
+            </Link>
 
-            <nav aria-label="Study tools" className="space-y-0.5">
-              <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">Tools</div>
-              {toolsNav.map((item) => {
-                const Icon = item.icon;
-                const active = pathname.startsWith(item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={onNavigate}
-                    className={`flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-                      active ? "bg-white/15 text-white" : "text-sidebar-fg/80 hover:bg-white/10 hover:text-white"
-                    }`}
-                  >
-                    <Icon className="h-3.5 w-3.5 shrink-0" />
-                    {item.label}
-                  </Link>
-                );
-              })}
+            <nav aria-label="Exam preparation" className="space-y-4">
+              {[{ title: "", items: [homeNav] }, ...navGroups].map((group) => (
+                <div key={group.title || "home"} className="space-y-0.5">
+                  {group.title && (
+                    <div className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
+                      {group.title}
+                    </div>
+                  )}
+                  {group.items.map((item) => {
+                    const Icon = item.icon;
+                    const active = item.href === `/exam/${slug}` ? pathname === item.href : pathname.startsWith(item.href);
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={onNavigate}
+                        aria-current={active ? "page" : undefined}
+                        className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition ${
+                          active ? "bg-white/15 text-white" : "text-sidebar-fg/85 hover:bg-white/10 hover:text-white"
+                        }`}
+                      >
+                        <Icon className="h-4 w-4 shrink-0" />
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              ))}
             </nav>
           </>
         )}

@@ -37,6 +37,46 @@ function AccuracyList({ rows, labelMap, empty }: { rows: Row[]; labelMap?: Recor
   );
 }
 
+const SCORE_TARGET = 65; // % correct we recommend before test day
+const USAGE_TARGET = 80; // % of the question bank we recommend completing
+const READINESS_TARGET = 2; // full-length readiness / mock exams we recommend finishing
+
+/** Semicircle gauge with a target tick, in the style of a pass-targets dashboard. */
+function ArcGauge({ value, target, label, sub, met }: { value: number; target: number; label: string; sub: string; met: boolean }) {
+  const r = 80;
+  const c = Math.PI * r; // half circumference
+  const v = Math.max(0, Math.min(100, value));
+  const angle = Math.PI * (1 - target / 100);
+  const tx = 100 + (r + 10) * Math.cos(angle);
+  const ty = 100 - (r + 10) * Math.sin(angle);
+  const tx2 = 100 + (r - 10) * Math.cos(angle);
+  const ty2 = 100 - (r - 10) * Math.sin(angle);
+  return (
+    <div className="panel space-y-1 p-4 text-center">
+      <div className="text-left text-sm font-bold">{label}</div>
+      <svg viewBox="0 0 200 118" className="mx-auto w-full max-w-[220px]" role="img" aria-label={`${label}: ${Math.round(v)}%, target ${target}%`}>
+        <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" strokeWidth="16" strokeLinecap="round" className="stroke-muted" />
+        <path
+          d="M 20 100 A 80 80 0 0 1 180 100"
+          fill="none"
+          strokeWidth="16"
+          strokeLinecap="round"
+          strokeDasharray={`${(v / 100) * c} ${c}`}
+          className={met ? "stroke-emerald-500" : "stroke-accent"}
+        />
+        <line x1={tx} y1={ty} x2={tx2} y2={ty2} strokeWidth="3" className="stroke-foreground/50" />
+        <text x="100" y="92" textAnchor="middle" className="fill-foreground text-[30px] font-bold">
+          {Math.round(v)}%
+        </text>
+      </svg>
+      <div className="text-xs muted">{sub}</div>
+      <div className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${met ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-muted"}`}>
+        Target: {target}%{met ? " · met" : ""}
+      </div>
+    </div>
+  );
+}
+
 export default async function ExamProgressPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const user = await requireUser();
@@ -89,6 +129,29 @@ export default async function ExamProgressPage({ params }: { params: Promise<{ s
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Progress</h1>
         <p className="max-w-2xl text-sm muted">Where you stand in {exam.name}, and where your next hour is best spent.</p>
       </header>
+
+      {/* Pass targets */}
+      {(() => {
+        const used = path.bank.correct + path.bank.incorrect + path.bank.omitted;
+        const usedPct = path.bank.total ? (used / path.bank.total) * 100 : 0;
+        const scorePct = stats.accuracy * 100;
+        const doneMocks = stats.recentTests.filter((t) => t.status === "completed" && (t.kind === "mock" || t.kind === "assessment")).length;
+        const mocksPct = Math.min(100, (doneMocks / READINESS_TARGET) * 100);
+        const met = [scorePct >= SCORE_TARGET, usedPct >= USAGE_TARGET, doneMocks >= READINESS_TARGET].filter(Boolean).length;
+        return (
+          <section className="space-y-3">
+            <SectionHeading
+              title="Pass targets"
+              caption={`You have met ${met} of 3 targets. Students who reach all three are far more likely to pass first time.`}
+            />
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <ArcGauge value={scorePct} target={SCORE_TARGET} label="Your score" sub={`${stats.correct} correct of ${stats.attempted} answers`} met={scorePct >= SCORE_TARGET} />
+              <ArcGauge value={usedPct} target={USAGE_TARGET} label="Question bank usage" sub={`${used} used · ${path.bank.unused} unused`} met={usedPct >= USAGE_TARGET} />
+              <ArcGauge value={mocksPct} target={100} label="Readiness exams" sub={`${doneMocks} of ${READINESS_TARGET} full-length exams finished`} met={doneMocks >= READINESS_TARGET} />
+            </div>
+          </section>
+        );
+      })()}
 
       {/* Headline numbers, each explained */}
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">

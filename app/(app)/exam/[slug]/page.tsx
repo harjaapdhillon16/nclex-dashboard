@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
-import { ArrowRight, BookOpen, Calendar, ClipboardList, Flame, Info, PenLine, Target } from "lucide-react";
+import { ArrowRight, BarChart3, BookOpen, Calendar, ClipboardList, FileText, Flame, FlaskConical, Gauge, Info, Layers, PenLine, Target, Video } from "lucide-react";
 import { db } from "@/lib/db";
 import { enrollments, exams } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth";
+import { startCustomTestAction } from "../../actions";
 import { examAnalytics } from "@/lib/tests";
 import { estimate } from "@/lib/scoring";
 import { STAGE_LABEL, STAGE_STYLE, daysUntil, getLearningPath, pct, type Unit } from "@/lib/learning-path";
@@ -58,6 +59,8 @@ export default async function ExamHomePage({ params }: { params: Promise<{ slug:
   const rankedUnits: Unit[] = [...touched, ...untouched];
 
   const recent = stats.recentTests.slice(0, 3);
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   return (
     <div className="space-y-6">
@@ -102,48 +105,50 @@ export default async function ExamHomePage({ params }: { params: Promise<{ slug:
         </Link>
       </section>
 
-      {!started ? (
-        /* New learner: explain the loop instead of showing empty charts */
-        <section className="space-y-3">
-          <SectionHeading
-            title={`How ${exam.shortName} works here`}
-            caption={`${bank.total} questions · ${totals.lessons} lessons · ${totals.cards} flashcards`}
-          />
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <Link href={`/exam/${exam.slug}/learn`} className="panel space-y-2 p-4 transition hover:border-accent/50">
-              <div className="flex items-center gap-2 font-bold">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-xs text-white">1</span>
-                <BookOpen className="h-4 w-4 text-accent" />
-                Learn
-              </div>
-              <p className="text-xs muted">
-                {units.length} unit{units.length === 1 ? "" : "s"}, each with lessons, flashcards and practice questions.
-              </p>
-              <div className="text-xs font-semibold text-accent">Open the learning path →</div>
+      {/* Quick actions on a purple hero band */}
+      <section className="-mx-4 rounded-none bg-gradient-to-br from-[#4a3fd0] via-[#5b4ee6] to-[#7a63f2] px-4 py-5 sm:mx-0 sm:rounded-2xl sm:px-6">
+        <h2 className="mb-3 text-lg font-bold text-white">{greeting}, ready to study {exam.shortName}?</h2>
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+          <form action={startCustomTestAction} className="contents">
+            <input type="hidden" name="examSlug" value={exam.slug} />
+            <input type="hidden" name="kind" value="custom" />
+            <input type="hidden" name="mode" value="tutor" />
+            <input type="hidden" name="pool" value="unused" />
+            <input type="hidden" name="count" value="5" />
+            <input type="hidden" name="name" value="Daily warm-up" />
+            <button type="submit" className="group flex items-center gap-3 rounded-xl bg-white px-3.5 py-3 text-left text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600">
+                <Flame className="h-4.5 w-4.5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold leading-tight">Daily warm-up</span>
+                <span className="block truncate text-xs text-slate-500">5 fresh questions, start in one click</span>
+              </span>
+              <ArrowRight className="h-4 w-4 text-slate-300 transition group-hover:text-[#5b4ee6]" />
+            </button>
+          </form>
+          {[
+            { href: `/exam/${exam.slug}/create`, icon: PenLine, title: "Create Test", sub: "Build a test from any subjects, up to 85 questions" },
+            { href: `/exam/${exam.slug}/assessments`, icon: Gauge, title: "Readiness exams", sub: "Gauge how ready you are to pass" },
+            { href: `/exam/${exam.slug}/analytics`, icon: BarChart3, title: "Performance", sub: "See if you are ready to pass" },
+            { href: `/exam/${exam.slug}/tests`, icon: ClipboardList, title: "Previous tests", sub: "Review past test attempts" },
+            { href: `/exam/${exam.slug}/flashcards`, icon: Layers, title: "Flashcards", sub: `${totals.cards} cards, spaced repetition` },
+          ].map((a) => (
+            <Link key={a.title} href={a.href} className="group flex items-center gap-3 rounded-xl bg-white px-3.5 py-3 text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#5b4ee6]/10 text-[#5b4ee6]">
+                <a.icon className="h-4.5 w-4.5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold leading-tight">{a.title}</span>
+                <span className="block truncate text-xs text-slate-500">{a.sub}</span>
+              </span>
+              <ArrowRight className="h-4 w-4 text-slate-300 transition group-hover:text-[#5b4ee6]" />
             </Link>
-            <Link href={`/exam/${exam.slug}/create`} className="panel space-y-2 p-4 transition hover:border-accent/50">
-              <div className="flex items-center gap-2 font-bold">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-xs text-white">2</span>
-                <PenLine className="h-4 w-4 text-accent" />
-                Practice
-              </div>
-              <p className="text-xs muted">Build a test from any units and get the answer and reasoning after every question.</p>
-              <div className="text-xs font-semibold text-accent">Create a test →</div>
-            </Link>
-            <Link href={`/exam/${exam.slug}/tests`} className="panel space-y-2 p-4 transition hover:border-accent/50">
-              <div className="flex items-center gap-2 font-bold">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-xs text-white">3</span>
-                <ClipboardList className="h-4 w-4 text-accent" />
-                Test yourself
-              </div>
-              <p className="text-xs muted">
-                A timed mock exam: {exam.mockQuestionCount} questions in {exam.durationMinutes} minutes, answers at the end.
-              </p>
-              <div className="text-xs font-semibold text-accent">See mock exams →</div>
-            </Link>
-          </div>
-        </section>
-      ) : (
+          ))}
+        </div>
+      </section>
+
+      {started && (
         <>
           <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             {/* Question bank usage */}
@@ -255,53 +260,95 @@ export default async function ExamHomePage({ params }: { params: Promise<{ slug:
             </div>
           </section>
 
-          {/* Performance by unit */}
-          <section className="space-y-3">
-            <SectionHeading
-              title="Performance by unit"
-              caption="Weakest first. Open a unit to read, memorise and practice it."
-              right={
-                <Link href={`/exam/${exam.slug}/analytics`} className="text-xs font-semibold text-accent hover:underline">
-                  Full progress →
-                </Link>
-              }
-            />
-            <div className="panel divide-y divide-border overflow-hidden">
-              {rankedUnits.map((u) => {
-                const tone = accTone(u.accuracy);
-                return (
-                  <Link
-                    key={u.id}
-                    href={`/exam/${exam.slug}/learn/${u.id}`}
-                    className="grid grid-cols-1 gap-2 px-4 py-3 transition hover:bg-muted/50 sm:grid-cols-12 sm:items-center sm:gap-4"
-                  >
-                    <div className="sm:col-span-5">
-                      <div className="text-sm font-semibold leading-snug">{u.name}</div>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                        <span className={`chip border text-[10px] font-semibold ${STAGE_STYLE[u.stage]}`}>{STAGE_LABEL[u.stage]}</span>
-                        {u.weight != null && <span className="text-[11px] muted">{u.weight}% of exam</span>}
-                      </div>
-                    </div>
-                    <div className="sm:col-span-3">
-                      <div className="mb-1 text-[11px] muted tabular-nums">
-                        {u.answered} / {u.questionTotal} answered
-                      </div>
-                      <Bar value={u.questionTotal ? (u.answered / u.questionTotal) * 100 : 0} />
-                    </div>
-                    <div className="sm:col-span-3">
-                      <div className={`mb-1 text-[11px] font-semibold tabular-nums ${tone.text}`}>
-                        {u.accuracy == null ? "No answers yet" : `${pct(u.accuracy)}% correct`}
-                      </div>
-                      <Bar value={pct(u.accuracy)} className={tone.bar} />
-                    </div>
-                    <ArrowRight className="hidden h-4 w-4 justify-self-end muted sm:col-span-1 sm:block" />
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
         </>
       )}
+
+      {/* Study by subject */}
+      <section className="space-y-3">
+        <SectionHeading
+          title={`Study by ${exam.axes?.includes("subject") ? "subject" : "unit"}`}
+          caption="Open a subject to read its lessons, drill flashcards and practice its questions."
+          right={
+            <Link href={`/exam/${exam.slug}/learn`} className="text-xs font-semibold text-accent hover:underline">
+              Learning path →
+            </Link>
+          }
+        />
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {rankedUnits.map((u) => {
+            const tone = accTone(u.accuracy);
+            return (
+              <Link key={u.id} href={`/exam/${exam.slug}/learn/${u.id}`} className="panel group space-y-2.5 p-4 transition hover:border-accent/50">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-bold">{u.name}</div>
+                    <div className="mt-0.5 text-[11px] muted">
+                      {u.lessons.length} lesson{u.lessons.length === 1 ? "" : "s"} · {u.cardTotal} flashcards
+                      {u.weight != null && ` · ${u.weight}% of exam`}
+                    </div>
+                  </div>
+                  <span className={`chip shrink-0 border text-[10px] font-semibold ${STAGE_STYLE[u.stage]}`}>{STAGE_LABEL[u.stage]}</span>
+                </div>
+                <div>
+                  <div className="mb-1 flex items-center justify-between text-[11px] muted tabular-nums">
+                    <span>
+                      {u.answered} of {u.questionTotal} questions used
+                    </span>
+                    <span className={`font-semibold ${tone.text}`}>{u.accuracy == null ? "—" : `${pct(u.accuracy)}% correct`}</span>
+                  </div>
+                  <Bar value={u.questionTotal ? (u.answered / u.questionTotal) * 100 : 0} className={u.accuracy == null ? "bg-accent" : tone.bar} />
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Study by question type + resources */}
+      <section className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <div className="space-y-3">
+          <SectionHeading title="Study by question type" />
+          <div className="panel divide-y divide-border">
+            {[
+              { href: `/exam/${exam.slug}/create`, icon: PenLine, title: "Standalone questions", sub: `${bank.total} questions in the bank` },
+              ...(exam.features?.caseStudies !== false
+                ? [{ href: `/exam/${exam.slug}/cases`, icon: FlaskConical, title: "Case studies", sub: "Multi-step clinical judgment cases" }]
+                : []),
+              { href: `/exam/${exam.slug}/assessments`, icon: Gauge, title: "Readiness exams", sub: "Full-length assessments with a pass-likelihood estimate" },
+              { href: `/exam/${exam.slug}/tests`, icon: ClipboardList, title: "Timed mock exams", sub: `${exam.mockQuestionCount} questions in ${exam.durationMinutes} minutes` },
+            ].map((r) => (
+              <Link key={r.title} href={r.href} className="flex items-center gap-3 px-4 py-3 transition hover:bg-muted/50">
+                <r.icon className="h-4 w-4 shrink-0 text-accent" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold">{r.title}</span>
+                  <span className="block truncate text-xs muted">{r.sub}</span>
+                </span>
+                <ArrowRight className="h-4 w-4 muted" />
+              </Link>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-3">
+          <SectionHeading title="Resources" />
+          <div className="panel divide-y divide-border">
+            {[
+              { href: `/exam/${exam.slug}/study`, icon: Video, title: "Lessons & videos", sub: `${totals.lessons} lessons across every subject` },
+              ...(exam.features?.guides !== false ? [{ href: `/exam/${exam.slug}/cheat-sheets`, icon: FileText, title: "Cheat sheets", sub: "High-yield one-page summaries" }] : []),
+              { href: `/exam/${exam.slug}/flashcards`, icon: Layers, title: "Flashcards", sub: `${totals.cards} cards` },
+              { href: `/exam/${exam.slug}/review`, icon: BookOpen, title: "Review my answers", sub: "Revisit incorrect and marked questions" },
+            ].map((r) => (
+              <Link key={r.title} href={r.href} className="flex items-center gap-3 px-4 py-3 transition hover:bg-muted/50">
+                <r.icon className="h-4 w-4 shrink-0 text-accent" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold">{r.title}</span>
+                  <span className="block truncate text-xs muted">{r.sub}</span>
+                </span>
+                <ArrowRight className="h-4 w-4 muted" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {recent.length > 0 && (
         <section className="space-y-3">
